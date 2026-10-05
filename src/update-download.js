@@ -76,8 +76,8 @@ async function probeMirrors(options) {
   const results = await Promise.all(mirrors.map(probeOne));
   const usable = results.filter((r) => r.ok).sort((a, b) => a.ms - b.ms);
   const dead = results.filter((r) => !r.ok);
-  usable.forEach((r) => log(`镜像可用：${r.name}（${r.ms}ms）`));
-  dead.forEach((r) => log(`镜像不可用：${r.name}（${r.error || ('HTTP ' + r.status)}）`));
+  usable.forEach((r) => log(`镜像可用：${r.name} ${r.ms}ms`));
+  dead.forEach((r) => log(`镜像不可用：${r.name} ${r.error || ('HTTP ' + r.status)}`));
   /* 一个都不通时，把原始直连放在最前面：至少让下载去试一次，
      而不是因为"探测失败"就直接告诉用户没网。 */
   const fallback = results.filter((r) => !r.prefix && !r.fullUrl);
@@ -98,8 +98,8 @@ async function downloadWithFallback(options) {
   const fetchImpl = o.fetchImpl || o.fetch;
   if (!url) throw new Error('downloadWithFallback 缺少 url');
   if (!dest) throw new Error('downloadWithFallback 缺少 dest');
-  if (!fsImpl) throw new Error('downloadWithFallback 缺少注入的 fs（fs 或 fsImpl）');
-  if (typeof fetchImpl !== 'function') throw new Error('downloadWithFallback 缺少注入的 fetch（fetchImpl 或 fetch）');
+  if (!fsImpl) throw new Error('downloadWithFallback 缺少注入的 fs，传 fs 或 fsImpl');
+  if (typeof fetchImpl !== 'function') throw new Error('downloadWithFallback 缺少注入的 fetch，传 fetchImpl 或 fetch');
   const onProgress = typeof o.onProgress === 'function' ? o.onProgress : () => {};
   const log = typeof o.log === 'function' ? o.log : () => {};
   const expectedSize = typeof o.expectedSize === 'number' ? o.expectedSize : 0;
@@ -137,7 +137,7 @@ function describeWriteError(e, dest) {
   let name = '安装包';
   try { name = require('path').basename(String(dest || '')) || name; } catch (err) {}
   if (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY') {
-    return `临时文件写不进去（${name}）：多半是上一次的安装程序还在运行，或者被安全软件锁住了`;
+    return `临时文件写不进去：${name}。多半是上一次的安装程序还在运行，或者被安全软件锁住了`;
   }
   if (code === 'ENOSPC') return '磁盘空间不够，装不下安装包';
   if (code === 'ENOENT') return '临时目录不存在，安装包没地方放';

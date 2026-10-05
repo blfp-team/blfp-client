@@ -47,7 +47,7 @@
 
   /* 独立窗口必须能连上主窗口，否则什么都做不了 —— 明确提示而不是静默 */
   if (!bridge || typeof bridge.tunerToMain !== 'function') {
-    setStatus('未连接到主窗口（请在 BLFP 应用里按 Ctrl+Shift+D 打开）', 'bad');
+    setStatus('未连接到主窗口，请在 BLFP 应用里按 Ctrl+Shift+D 打开', 'bad');
     return;
   }
 
@@ -64,7 +64,7 @@
     list.forEach(function (s) {
       var o = document.createElement('option');
       o.value = s.sel;
-      o.textContent = s.name + (s.modal ? '（弹窗）' : '');
+      o.textContent = s.name + (s.modal ? ' 弹窗' : '');
       o.dataset.name = s.name;
       o.dataset.modal = s.modal ? '1' : '';
       sel.appendChild(o);
@@ -214,7 +214,7 @@
       var s = document.createElement('select');
       p.opts.forEach(function (o) {
         var op = document.createElement('option');
-        op.value = o; op.textContent = o === '' ? '（默认）' : o;
+        op.value = o; op.textContent = o === '' ? '默认' : o;
         s.appendChild(op);
       });
       s.value = cur || '';
@@ -404,7 +404,7 @@
           elements = p.elements || elements;
           if (p.sel) selectElement(p.sel);
           else renderElements();
-          setStatus('已选中：' + (p.sel || '（没选到元素）'), p.sel ? 'ok' : '');
+          setStatus('已选中：' + (p.sel || '没选到元素'), p.sel ? 'ok' : '');
           break;
         default:
           break;

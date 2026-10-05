@@ -159,7 +159,7 @@
     var selfSel = selectorFor(root);
     if (selfSel) {
       seen[selfSel] = 1;
-      out.push({ sel: selfSel, name: describe(root) + '（整个界面）', tag: root.tagName.toLowerCase() });
+      out.push({ sel: selfSel, name: describe(root) + ' 整个界面', tag: root.tagName.toLowerCase() });
     }
     function walk(el, depth) {
       if (!el || el.nodeType !== 1 || depth > 6 || out.length > 400) return;
@@ -194,7 +194,7 @@
 
   function openTunerWindow() {
     if (!bridge || typeof bridge.tunerOpen !== 'function') {
-      try { console.warn('[布局调试器] 当前环境不支持独立窗口（需要 Electron 运行）'); } catch (e) {}
+      try { console.warn('[布局调试器] 当前环境不支持独立窗口，需要 Electron 运行'); } catch (e) {}
       return;
     }
     bridge.tunerOpen().then(function () {

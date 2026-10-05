@@ -137,7 +137,7 @@ async function startSilentInstaller(options) {
   const runElevated = o.runElevated || defaultRunElevated;
   const elevated = await runElevated(command, args);
   if (elevated && elevated.ok) {
-    log('安装器已启动（提权方式）');
+    log('安装器已启动，提权方式');
     return { ok: true, method: 'elevated' };
   }
   return {

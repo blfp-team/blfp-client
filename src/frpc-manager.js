@@ -164,7 +164,7 @@ class FrpcManager extends EventEmitter {
         this._proc = null;
         if (!this._stopping && !processError) {
           this._setState('error');
-          this.emit('error', `frpc 进程退出 (code ${code})`);
+          this.emit('error', `frpc 进程退出，code ${code}`);
         }
         finish(reject, new Error(`frpc 进程意外退出，退出码: ${code}${signal ? `，信号: ${signal}` : ''}`));
       });

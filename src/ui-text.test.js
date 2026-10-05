@@ -15,7 +15,22 @@ const path = require('node:path');
 
 const scan = require('./ui-text-scan.js');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['renderer/index.html', 'renderer/app.js', 'main.js', 'preload.js', 'scripts/changelog.js'];
+/*
+ * 扫描范围 = 用户能看到文字的所有地方：
+ *   客户端界面、主进程、预加载、更新下载/启动的日志与报错、
+ *   布局调试器（PRE 版会带上，用户看得到）、卸载器、
+ *   以及 scripts/changelog.js —— 它生成的发布说明会显示在更新弹窗里。
+ * 不含 scripts/bump-version.js、scripts/verify-build.js、installer/check-payload.js、
+ * installer/verify-packed.js：那些是构建/CI 工具，开发者自己看的，不是产品界面。
+ */
+const FILES = [
+  'renderer/index.html', 'renderer/app.js', 'main.js', 'preload.js',
+  'renderer/layout-tuner-window.html', 'renderer/layout-tuner-window.js', 'renderer/layout-tuner.js',
+  'scripts/changelog.js',
+  'src/easytier-manager.js', 'src/frpc-manager.js', 'src/platform.js',
+  'src/update-download.js', 'src/update-launch.js', 'src/update-source.js',
+  'uninstaller/main.js',
+];
 
 test('主程序界面文案里不能有"标签（括号解释）"的写法', () => {
   const hits = scan.scan(ROOT, FILES);

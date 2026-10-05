@@ -1,9 +1,9 @@
 /* 全局异常兜底：避免任何未捕获异常弹出 "A JavaScript error occurred in the main process" 对话框 */
 process.on('uncaughtException', (err) => {
-  console.error('[卸载器] 未捕获异常（已拦截）:', err && err.stack ? err.stack : err);
+  console.error('[卸载器] 已拦截未捕获异常:', err && err.stack ? err.stack : err);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('[卸载器] 未处理的 Promise 拒绝（已拦截）:', reason && reason.message ? reason.message : reason);
+  console.error('[卸载器] 已拦截未处理的 Promise 拒绝:', reason && reason.message ? reason.message : reason);
 });
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');

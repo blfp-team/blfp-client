@@ -124,7 +124,7 @@ class EasyTierManager extends EventEmitter {
     this._lastError = null;
     this._stopping = false;
     this._setState('starting');
-    this._log(`正在启动 EasyTier（${mode} 模式）`);
+    this._log(`正在启动 EasyTier，${mode} 模式`);
 
     try {
       const child = spawn(binaryPath, args, {
@@ -233,12 +233,12 @@ class EasyTierManager extends EventEmitter {
       this._emitError(error.message);
     });
     child.once('close', (code, signal) => {
-      this._log(`EasyTier 进程退出（code=${code}, signal=${signal || 'none'}）`);
+      this._log(`EasyTier 进程退出 code=${code} signal=${signal || 'none'}`);
       if (this._generation !== generation || this._proc !== child) return;
       this._proc = null;
       this._closeProxy();
       if (!this._stopping) {
-        this._lastError = `EasyTier 进程意外退出（退出码 ${code}）`;
+        this._lastError = `EasyTier 进程意外退出，退出码 ${code}`;
         this._setState('error');
         this._emitError(this._lastError);
       }
@@ -342,11 +342,11 @@ class EasyTierManager extends EventEmitter {
              先短暂重试，仍失败则走 0.0.0.0 回退（只放行虚拟网段来源）。 */
           eaccesAttempts += 1;
           if (eaccesAttempts <= 6) {
-            this._log('虚拟网卡绑定被拒（EACCES），重试 ' + eaccesAttempts + '/6 ...');
+            this._log('虚拟网卡绑定被拒 EACCES，重试 ' + eaccesAttempts + '/6 ...');
             await this._delay(800);
             continue;
           }
-          this._log('虚拟 IP 绑定持续被拒（EACCES），改用 0.0.0.0 回退方案');
+          this._log('虚拟 IP 绑定持续被拒 EACCES，改用 0.0.0.0 回退方案');
           break;
         }
         await this._delay(500);
@@ -361,7 +361,7 @@ class EasyTierManager extends EventEmitter {
       this._log('已回退监听 0.0.0.0:' + proxyPort + '（虚拟 IP ' + virtualIp + ' 绑定被系统拒绝；仅放行 ' + virtualIp.split('.').slice(0, 2).join('.') + '.x.x 来源，隧道连接不受影响）');
       return;
     } catch (fallbackError) {
-      throw new Error('等待虚拟 IP ' + virtualIp + ' 可绑定超时。请依次检查：1) 是否以管理员身份运行（虚拟网卡需要权限） 2) Windows 防火墙/杀软是否拦截 3) 端口 25565 是否被系统保留（管理员运行: netsh int ipv4 show excludedportrange protocol=tcp）');
+      throw new Error('等待虚拟 IP ' + virtualIp + ' 可绑定超时。请依次检查：1) 是否以管理员身份运行，虚拟网卡需要权限 2) Windows 防火墙或杀软是否拦截 3) 端口 25565 是否被系统保留，可执行 netsh int ipv4 show excludedportrange protocol=tcp 查看');
     }
   }
 
@@ -395,7 +395,7 @@ class EasyTierManager extends EventEmitter {
       await this._delay(500);
     }
     this._log('警告：虚拟 IP ' + virtualIp + ' 未出现在本机网卡上。当前 IPv4: ' + (last.map((i) => i.address).join(', ') || '无'));
-    this._log('这通常表示 EasyTier 的虚拟网卡(TUN/wintun)创建失败，请检查上方 [EasyTier] 日志中的驱动相关报错');
+    this._log('这通常表示 EasyTier 的虚拟网卡 TUN/wintun 创建失败，请检查上方 [EasyTier] 日志中的驱动相关报错');
     return false;
   }
 
@@ -415,8 +415,8 @@ class EasyTierManager extends EventEmitter {
       execFile('powershell', ['-NoProfile', '-Command',
         "Set-NetConnectionProfile -InterfaceAlias '" + iface.replace(/'/g, "''") + "' -NetworkCategory Private -ErrorAction SilentlyContinue"
       ], (err) => {
-        if (err) this._log('虚拟网卡网络类别设置失败（可忽略）: ' + (err.message || ''));
-        else this._log('已将虚拟网卡 ' + iface + ' 设为专用网络（防火墙放行访客入站）');
+        if (err) this._log('虚拟网卡网络类别设置失败，可忽略: ' + (err.message || ''));
+        else this._log('已将虚拟网卡 ' + iface + ' 设为专用网络，防火墙会放行访客入站');
       });
     } catch (e) { /* 忽略 */ }
   }
@@ -446,7 +446,7 @@ class EasyTierManager extends EventEmitter {
       const server = net.createServer((client) => {
         /* 回退监听 0.0.0.0 时，只放行来自虚拟网段的连接，避免把 MC 端口暴露到局域网/公网 */
         if (restrictToVirtual && !this._isVirtualSource(client.remoteAddress, virtualIp)) {
-          this._log('已拒绝非虚拟网段连接: ' + client.remoteAddress + '（仅放行虚拟网段）');
+          this._log('已拒绝非虚拟网段连接: ' + client.remoteAddress);
           client.destroy();
           return;
         }
