@@ -20,7 +20,17 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('high-dpi-support', '1');
 app.commandLine.appendSwitch('force-color-profile', 'srgb');
 
-const GITHUB_RELEASE_API = 'https://api.github.com/repos/blfp-team/blfp-client/releases/latest';
+/* 仓库地址：2026-10 从 EVFBV 转到 blfp-team 名下 */
+const GITHUB_REPO = 'blfp-team/blfp-client';
+/* 版本发现的入口，按顺序试。
+   国内 api.github.com 经常连不上 —— 这正是当初建自建下载服务器的原因。
+   现在改用 GitHub 加速镜像兜底：实测 **只有 gh-proxy.com 能把 api.github.com 一起代理掉**
+   （返回 200 + 正常 JSON）；ghproxy.net / ghfast.top 只代理 github.com 的文件路径，
+   拿去代理 API 会返回 403 Invalid input。 */
+const GITHUB_API_BASES = [
+  'https://api.github.com',
+  'https://gh-proxy.com/https://api.github.com',
+];
 let mainWindow;
 /* 布局调试器的独立窗口（仅 PRE 版带调试器时才会创建）。
    独立窗口的好处：主窗口可以随便切页面、开关弹窗，调试器始终在旁边可见可操作，
@@ -281,24 +291,34 @@ ipcMain.handle('open-external', async (_e, url) => {
  */
 function buildUpdateMirrors(assetName, primaryUrl) {
   /* 源的顺序只是"初始顺序"，真正用哪个是按实测速度排的 ——
-     所以"自动选择能用的镜像源"是真的测过再选，而不是写死顺序。 */
+     所以"自动选择能用的镜像源"是真的测过再选，而不是写死顺序。
+
+     这三个加速源都是"把 GitHub 原始地址拼在后面"的形态（prefix 型），
+     所以主地址来自 GitHub release 资产时，它们直接就能用。
+     2026-10 起下载走的就是这条：GitHub 直连（国内一般不通）+ 三个加速镜像。 */
   const mirrors = [
     { name: 'GitHub 直连', prefix: '' },
     { name: 'ghfast.top', prefix: 'https://ghfast.top/' },
     { name: 'ghproxy.net', prefix: 'https://ghproxy.net/' },
     { name: 'gh-proxy.com', prefix: 'https://gh-proxy.com/' },
   ];
-  /* 自家下载服务器：它在国内，通常比所有 GitHub 加速都快。
-     它属于"完整地址"型源（路径是 /download/<文件名>，套不上海外加速的前缀拼接），
-     所以用 fullUrl 而不是 prefix。下载失败会自动落到下面的其它源。
+  /* 自家下载服务器属于"完整地址"型源：它的路径是 /download/<文件名>，
+     套不上海外加速的前缀拼接，所以用 fullUrl 而不是 prefix。
+     只在主地址确实来自它的时候才加 —— 否则会拼出一个根本不存在的
+     https://github.com/download/<文件名>（主地址来自 GitHub 时会这样）。
 
      ⚠️ base 必须取**主地址的 origin**，不能再用写死的 http 那个：
      downloadWithFallback 内部不会重新校验协议，塞一个 http 进去
      等于在"只允许 https"的守卫旁边开了个明文后门。 */
-  if (assetName) {
-    let base;
-    try { base = new URL(primaryUrl).origin; } catch (e) { base = undefined; }
-    mirrors.unshift({ name: 'BLFP 下载服务器', fullUrl: serverDownloadUrl(assetName, base) });
+  let host = null;
+  let origin = null;
+  try {
+    const u = new URL(primaryUrl);
+    host = u.hostname;
+    origin = u.origin;
+  } catch (e) { /* 地址不合法就不加，交给下面的加速源 */ }
+  if (assetName && host && !/^(www\.)?github\.com$/i.test(host)) {
+    mirrors.unshift({ name: 'BLFP 下载服务器', fullUrl: serverDownloadUrl(assetName, origin) });
   }
   return mirrors;
 }
@@ -501,38 +521,14 @@ ipcMain.handle('read-update-status', async () => {
   }
 });
 
-ipcMain.handle('check-github-update', async (_e, channel) => {
-  /* 更新渠道：'stable'（正式版，只拉最新正式 release）| 'test'（测试版，拉最新 release，含 pre 测试版）
-     GitHub 的 /releases/latest 永远不会返回 pre-release，所以测试渠道必须列全量再挑。 */
-  const wantBeta = channel === 'test';
-  /* 先问自家下载服务器：它在国内、快，而且 GitHub API 在国内经常连不上。
-     ⚠️ 但它**不看渠道**（它的"最新"可能就是预发布），
-     所以过滤交给 fetchServerRelease —— 正式渠道一律拒绝预发布，
-     否则正式用户会被推去测试版。它挑不出合适的就返回 null，我们回退 GitHub。 */
-  try {
-    const fromServer = await fetchServerRelease({
-      /* ⚠️ 必须用 updateFetch 而不是全局 fetch：
-         自家下载服务器用的是自签证书，全局 fetch 会直接拒掉；
-         而且 updateFetch 对镜像主机钉了证书，伪造/中间人塞的元数据骗不过去。
-         这份 JSON 里带着"去哪儿下载安装包"，走明文等于把下载地址交给中间人改。 */
-      fetchImpl: updateFetch,
-      channel: wantBeta ? 'test' : 'stable',
-      log: (m) => console.log('[更新] ' + m),
-    });
-    if (fromServer) {
-      console.log('[更新] 更新来源：BLFP 下载服务器 ' + fromServer.latestVersion);
-      return fromServer;
-    }
-  } catch (e) {
-    console.log('[更新] 下载服务器不可用，回退 GitHub：' + ((e && e.message) || e));
-  }
-
+/*
+ * 问一次 GitHub API，把 release 整理成客户端要的形状。
+ * 单独抽出来是为了能"直连不通就换加速镜像再问一次"。
+ */
+async function fetchGithubRelease(url, wantBeta) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const url = wantBeta
-      ? 'https://api.github.com/repos/blfp-team/blfp-client/releases?per_page=30'
-      : GITHUB_RELEASE_API;
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -583,6 +579,53 @@ ipcMain.handle('check-github-update', async (_e, channel) => {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+ipcMain.handle('check-github-update', async (_e, channel) => {
+  /* 更新渠道：'stable'（正式版，只拉最新正式 release）| 'test'（测试版，拉最新 release，含 pre 测试版）
+     GitHub 的 /releases/latest 永远不会返回 pre-release，所以测试渠道必须列全量再挑。 */
+  const wantBeta = channel === 'test';
+  const path = wantBeta
+    ? `/repos/${GITHUB_REPO}/releases?per_page=30`
+    : `/repos/${GITHUB_REPO}/releases/latest`;
+
+  /* 主力：GitHub API。直连优先，连不上就用加速镜像把 api.github.com 一起代理掉。
+     2026-10 起下载改走 GitHub 加速镜像，自建下载服务器不再当主力。 */
+  const failures = [];
+  for (const base of GITHUB_API_BASES) {
+    try {
+      const release = await fetchGithubRelease(base + path, wantBeta);
+      console.log('[更新] 更新来源：' + base);
+      return release;
+    } catch (e) {
+      const message = (e && e.message) || String(e);
+      failures.push(base + '：' + message);
+      console.log('[更新] ' + base + ' 不可用：' + message);
+    }
+  }
+
+  /* 兜底：自建下载服务器。只是保险丝 —— GitHub 和加速镜像全不通时才走到这里。
+     ⚠️ 它**不看渠道**（它的"最新"可能就是预发布），所以过滤交给 fetchServerRelease：
+     正式渠道一律拒绝预发布，否则正式用户会被推去测试版。挑不出合适的就返回 null。 */
+  try {
+    const fromServer = await fetchServerRelease({
+      /* ⚠️ 必须用 updateFetch 而不是全局 fetch：
+         自家下载服务器用的是自签证书，全局 fetch 会直接拒掉；
+         而且 updateFetch 对镜像主机钉了证书，伪造/中间人塞的元数据骗不过去。
+         这份 JSON 里带着"去哪儿下载安装包"，走明文等于把下载地址交给中间人改。 */
+      fetchImpl: updateFetch,
+      channel: wantBeta ? 'test' : 'stable',
+      log: (m) => console.log('[更新] ' + m),
+    });
+    if (fromServer) {
+      console.log('[更新] 更新来源：BLFP 下载服务器（兜底）' + fromServer.latestVersion);
+      return fromServer;
+    }
+  } catch (e) {
+    failures.push('BLFP 下载服务器：' + ((e && e.message) || e));
+  }
+
+  throw new Error('检查更新失败。' + failures.join('；'));
 });
 
 /* 与 renderer/app.js 的 compareVersions 同一语义：用于测试渠道挑最高版本（含 pre） */

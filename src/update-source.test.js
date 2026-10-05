@@ -152,17 +152,24 @@ test('结构不认识时返回 null，交给调用方回退 GitHub', () => {
 
 /* ================= 下载源列表 ================= */
 
-test('下载源里必须包含自家下载服务器，且它是"完整地址"型', () => {
+test('自家下载服务器只在主地址确实来自它时才进候选', () => {
   const i = MAIN.indexOf('function buildUpdateMirrors');
   assert.ok(i > 0, '找不到 buildUpdateMirrors');
-  const body = MAIN.slice(i, i + 1600);
+  const body = MAIN.slice(i, i + 1800);
   assert.ok(/BLFP 下载服务器/.test(body), '下载源列表里没有自家下载服务器');
-  assert.ok(/fullUrl:\s*serverDownloadUrl\(assetName,\s*base\)/.test(body),
+  assert.ok(/fullUrl:\s*serverDownloadUrl\(assetName,\s*origin\)/.test(body),
     '下载服务器必须用 fullUrl 表达 —— 它的路径跟 GitHub 不同，套不上海外加速的前缀拼接');
-  /* 关键：base 必须从主地址取，否则会往候选里塞写死的 http 地址，
+  /* 关键 1：base 必须从主地址取，否则会往候选里塞写死的 http 地址，
      而 downloadWithFallback 内部不重新校验协议 = 明文下载后门 */
-  assert.ok(/new URL\(primaryUrl\)\.origin/.test(body),
+  assert.ok(/new URL\(primaryUrl\)/.test(body) && /\.origin/.test(body),
     '镜像候选没有跟随主地址的协议 —— 会在"只允许 https"的守卫旁边开明文后门');
+  /* 关键 2：主地址来自 GitHub 时绝不能加这条 —— 会拼出一个根本不存在的
+     https://github.com/download/<文件名>，白白浪费一次探测。
+     注意：注释里也提到 github.com，必须先去掉注释再断言，
+     否则注释会把断言骗绿（这个坑踩过，见下面 logLine 那条）。 */
+  const code = stripJsComments(body);
+  assert.ok(/github/.test(code) && /test\(host\)/.test(code),
+    '没有排除 GitHub 主地址 —— 会往候选里塞一个不存在的 github.com/download/<文件名>');
 });
 
 test('完整地址型源能被解析出来（不能只支持前缀型）', () => {
@@ -176,15 +183,23 @@ test('完整地址型源能被解析出来（不能只支持前缀型）', () =>
     'https://github.com/c/d.exe', '直连应该原样返回');
 });
 
-test('版本发现必须先问下载服务器，失败再回退 GitHub', () => {
+test('版本发现先问 GitHub（直连 → 加速镜像），自建下载服务器只当兜底', () => {
   const i = MAIN.indexOf("ipcMain.handle('check-github-update'");
   assert.ok(i > 0, '找不到 check-github-update');
-  const body = MAIN.slice(i, i + 1400);
+  const body = MAIN.slice(i, i + 2200);
+  const basesAt = body.indexOf('GITHUB_API_BASES');
   const serverAt = body.indexOf('fetchServerRelease');
-  const githubAt = body.indexOf('GITHUB_RELEASE_API');
-  assert.ok(serverAt > 0, '版本发现没有问下载服务器');
-  assert.ok(githubAt > 0, '版本发现没有保留 GitHub 回退');
-  assert.ok(serverAt < githubAt, '应该先问下载服务器再回退 GitHub（国内 GitHub API 经常连不上）');
+  assert.ok(basesAt > 0, '版本发现没有走 GitHub API');
+  assert.ok(serverAt > basesAt,
+    '下载服务器排在了 GitHub 前面 —— 2026-10 起它只是兜底保险丝，GitHub 加速镜像才是主力');
+  /* 加速镜像必须能代理 api.github.com：实测只有 gh-proxy.com 行
+     （ghproxy.net / ghfast.top 拿去代理 API 会返回 403 Invalid input） */
+  const directAt = MAIN.indexOf("'https://api.github.com'");
+  const proxyAt = MAIN.indexOf("'https://gh-proxy.com/https://api.github.com'");
+  assert.ok(directAt > 0, '没有 api.github.com 直连入口');
+  assert.ok(proxyAt > directAt,
+    '没有"用加速镜像代理 API"的入口（或排在了直连前面）—— ' +
+    '国内 api.github.com 连不上时就彻底没招了');
 });
 
 /* 注释里提到 logLine 不该把断言弄红（踩过：断言被自己写的注释骗到）。

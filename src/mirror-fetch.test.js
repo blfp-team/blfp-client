@@ -143,8 +143,10 @@ test('main.js 的镜像候选基于主地址 origin，而不是写死的下载�
   const i = MAIN.indexOf('function buildUpdateMirrors');
   assert.ok(i > 0, '找不到 buildUpdateMirrors');
   const body = MAIN.slice(i, MAIN.indexOf('\n}', i));
-  assert.match(body, /new URL\(primaryUrl\)\.origin/,
-    'buildUpdateMirrors 没有用主地址的 origin —— 会往候选里塞写死的 http 地址');
+  assert.match(body, /new URL\(primaryUrl\)/,
+    'buildUpdateMirrors 没有用主地址 —— 会往候选里塞写死的 http 地址');
+  assert.match(body, /\.origin/,
+    'buildUpdateMirrors 没有取主地址的 origin —— 会往候选里塞写死的 http 地址');
   assert.match(body, /buildUpdateMirrors\(assetName, url\)|buildUpdateMirrors\(assetName/,
     'buildUpdateMirrors 的签名应接收主地址');
   /* 调用点必须把主地址传进去，否则 origin 取不到 */
