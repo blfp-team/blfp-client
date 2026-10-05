@@ -211,3 +211,34 @@ test('状态只报一次（读走就删，不能每次启动都弹）', () => {
   const fn = body.slice(0, body.indexOf('\n});'));
   assert.ok(/unlinkSync\(file\)/.test(fn), '读完没有删除状态文件，会每次启动都弹一次');
 });
+
+/* ================= 写不进去时不能崩 ================= */
+
+test('下载前先确认临时安装包写得进去，写不进去就换个名字', () => {
+  const body = handler('start-update');
+  assert.ok(/resolveInstallerDest\(assetName\)/.test(body),
+    '直接按固定文件名去写 —— 那个文件被上一个安装器/杀软占着时就是 EPERM（真实事故）');
+  assert.ok(!/const dest = updateInstallerPath\(/.test(body),
+    '还在直接用固定路径，没走可写性预检');
+  assert.ok(/function resolveInstallerDest/.test(MAIN_CODE), '没有 resolveInstallerDest 实现');
+  const fn = MAIN_CODE.slice(MAIN_CODE.indexOf('function resolveInstallerDest'));
+  assert.ok(/openSync\(/.test(fn.slice(0, fn.indexOf('\n}'))),
+    'resolveInstallerDest 没有真的试写一下，只是拼了个名字');
+  assert.ok(/Math\.random\(\)/.test(fn.slice(0, fn.indexOf('\n}'))),
+    '换的名字没有随机/时间戳，第二次还是会撞上同一个被占用的文件');
+});
+
+test('换名字产生的安装包要有人清，不能把临时目录堆满 200MB', () => {
+  assert.ok(/function sweepOldInstallers/.test(MAIN_CODE), '没有清理函数');
+  assert.ok(/sweepOldInstallers\(dest\)/.test(handler('start-update')), '下载前没有清理旧安装包');
+});
+
+test('主进程有未捕获异常兜底，用户不该看到原始 JS 报错框', () => {
+  assert.ok(/process\.on\('uncaughtException'/.test(MAIN_CODE),
+    '没有兜底 —— 任何一处漏掉的异步错误都会弹"A JavaScript error occurred in the main process"');
+  const i = MAIN_CODE.indexOf("process.on('uncaughtException'");
+  const fn = MAIN_CODE.slice(i, i + 900);
+  assert.ok(/LOG_PATH/.test(fn), '兜底没有把异常写进日志，用户/我们事后查不到');
+  assert.ok(/appendFileSync\(LOG_PATH/.test(fn), '没有真的写日志文件');
+  assert.ok(/showErrorBox/.test(fn), '没有给用户任何提示，异常会被静默吞掉');
+});

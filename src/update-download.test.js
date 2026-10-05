@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const dl = require('./update-download.js');
 
@@ -185,4 +186,71 @@ test('downloadWithFallback：HTTP 错误码会换源', async () => {
   const out = await dl.downloadWithFallback({ url: 'https://g/x', dest, fsImpl: fs, fetchImpl, mirrors, expectedSize: 10 });
   assert.equal(out.ok, true);
   assert.equal(out.mirror, 'good');
+});
+
+/* ---------------- 写不进去：不能把主进程搞崩 ---------------- */
+
+/*
+ * 真实事故（用户报的）：
+ *   更新到 v2.4.0-pre.6 时弹出
+ *   "A JavaScript error occurred in the main process
+ *    Uncaught Exception: Error: EPERM: operation not permitted, open
+ *    'C:\Users\32396\AppData\Local\Temp\BLFP-Setup-v2.4.0-pre.6.exe'"
+ *
+ * 原因是 createWriteStream 的 'error' 监听挂晚了：文件打不开时（Windows 上
+ * 正在运行的 exe 不能覆盖写、被杀软锁住）'error' 会在下载循环还在 await 网络数据时
+ * 抛出来，而 EventEmitter 的 'error' 没有监听者就是**直接 throw**，
+ * 这个 throw 在事件循环里，async 的 try/catch 接不住 → 主进程未捕获异常。
+ *
+ * 这个测试必须开子进程：老实现是**整个进程死掉**，在同一个进程里跑没法
+ * 既断言"没崩"又拿到返回值。所以断言子进程正常退出、并且拿到了 ok:false。
+ */
+test('目标文件写不进去时如实报错，绝不能把主进程搞崩（EPERM 事故回归）', () => {
+  const script = `
+    const fs = require('fs'), os = require('os'), path = require('path');
+    const dl = require(${JSON.stringify(require.resolve('./update-download.js'))});
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blfp-dl-'));
+    const dest = path.join(dir, 'BLFP-Setup-v2.4.0-pre.6.exe');
+    /* 把目标路径做成目录 —— 跨平台都能稳定复现"打开失败"，
+       Windows 上对应的是 EPERM（文件被占用） */
+    fs.mkdirSync(dest);
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const fetchImpl = async () => ({
+      ok: true, status: 206, headers: { get: () => '10' },
+      body: {
+        /* 必须真的让出事件循环：打开失败是在下一个事件循环 tick 抛出来的，
+           而那时下载循环正 await 网络数据 —— 这才是事故现场 */
+        getReader: () => ({ read: async () => { await wait(20); return { done: true }; }, cancel: async () => {} }),
+        cancel: async () => {},
+      },
+    });
+    dl.downloadWithFallback({
+      url: 'https://g/x', dest, fsImpl: fs, fetchImpl,
+      mirrors: [{ name: '直连', prefix: '' }], expectedSize: 10,
+    }).then((r) => {
+      console.log('RESULT ' + JSON.stringify(r));
+    }).catch((e) => {
+      console.log('RESULT ' + JSON.stringify({ ok: false, thrown: e.message }));
+    });
+  `;
+  const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 20000 });
+  assert.equal(child.status, 0,
+    '子进程异常退出了（老实现就是"主进程未捕获异常"整个崩掉）：\n' +
+    (child.stderr || '') + (child.stdout || ''));
+  const m = (child.stdout || '').match(/RESULT (.*)/);
+  assert.ok(m, '没有拿到结果，输出：' + (child.stdout || '') + (child.stderr || ''));
+  const result = JSON.parse(m[1]);
+  assert.equal(result.ok, false, '写不进去时必须如实返回失败，交给上层换源/提示');
+  assert.ok(result.error, '失败时必须带上原因');
+  assert.equal(result.thrown, undefined, '不该把错误抛到调用方接不住的地方：' + result.thrown);
+});
+
+test('describeWriteError：EPERM/EACCES 这类错误要翻成人话，不能直接把 errno 甩给用户', () => {
+  const eperm = Object.assign(new Error("EPERM: operation not permitted, open 'C:\\Temp\\BLFP-Setup.exe'"), { code: 'EPERM' });
+  const msg = dl.describeWriteError(eperm, 'C:\\Temp\\BLFP-Setup.exe');
+  assert.ok(!/EPERM|errno/i.test(msg), '还是把 errno 原样给用户看了：' + msg);
+  assert.match(msg, /占用|权限|安全软件|运行/, '没说出"文件被占着"这个真正的原因：' + msg);
+  assert.match(msg, /BLFP-Setup\.exe/, '没告诉用户是哪个文件：' + msg);
+  assert.match(dl.describeWriteError(Object.assign(new Error('x'), { code: 'ENOSPC' }), 'a.exe'), /空间/,
+    '磁盘满了要明说磁盘满了');
 });

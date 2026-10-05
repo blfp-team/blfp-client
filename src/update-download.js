@@ -127,9 +127,28 @@ async function downloadWithFallback(options) {
   return { ok: false, error: attempts.length ? attempts[attempts.length - 1].error : '下载失败', attempts };
 }
 
+/**
+ * 把 Node 的文件错误翻成人话。
+ * 这些错码几乎只在用户的 Windows 上出现，而原始信息（EPERM: operation not permitted, open '...'）
+ * 对用户等于没说 —— 他会以为软件坏了，而不是"临时文件被占着，我换个名字再来"。
+ */
+function describeWriteError(e, dest) {
+  const code = e && e.code;
+  let name = '安装包';
+  try { name = require('path').basename(String(dest || '')) || name; } catch (err) {}
+  if (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY') {
+    return `临时文件写不进去（${name}）：多半是上一次的安装程序还在运行，或者被安全软件锁住了`;
+  }
+  if (code === 'ENOSPC') return '磁盘空间不够，装不下安装包';
+  if (code === 'ENOENT') return '临时目录不存在，安装包没地方放';
+  if (code === 'EROFS') return '临时目录是只读的，安装包写不进去';
+  return (e && e.message) || String(e);
+}
+
 /** 从单个源下载；失败就抛错，由上层换源 */
 async function downloadOne(options) {
   const { candidate, dest, fsImpl, fetchImpl, onProgress, expectedSize, idleTimeoutMs } = options;
+  const log = typeof options.log === 'function' ? options.log : () => {};
   const controller = new AbortController();
   let lastDataAt = Date.now();
   /* 卡住检测：有源会"连上但不给数据"，不设这个就会永远挂着 */
@@ -138,6 +157,13 @@ async function downloadOne(options) {
   }, 2000);
 
   let written = 0;
+  let out = null;
+  let reader = null;
+  /* 写入流出错时用它把主流程叫醒（为什么需要，见下面挂 'error' 监听那一段） */
+  let streamError = null;
+  let wakeOnStreamError = () => {};
+  const streamFailed = new Promise((resolve) => { wakeOnStreamError = resolve; });
+
   try {
     const res = await fetchImpl(candidate.url, { signal: controller.signal, redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -148,46 +174,98 @@ async function downloadOne(options) {
       /* Range 探针可能让 content-length 只有 1，所以只在明显更大时才采信 */
       if (Number.isFinite(n) && n > 1) total = n;
     }
-    const out = fsImpl.createWriteStream(dest);
-    const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+
+    out = fsImpl.createWriteStream(dest);
+
+    /*
+     * ⚠️ 'error' 监听必须**在这里**就挂上，绝不能等下载循环跑完再挂。
+     *
+     * 目标文件打不开时（Windows 上最常见：上一次的安装程序还在运行、exe 被占用，
+     * 或者被杀软/权限拦下），Node 报 EPERM/EACCES/EBUSY。这个 'error' 是
+     * 打开完成时**异步**抛出的 —— 那一刻我们正 await 网络数据。而 EventEmitter 的
+     * 'error' 事件**没有监听者就是直接 throw**，这个 throw 发生在事件循环里，
+     * async 函数的 try/catch 接不住 → 主进程未捕获异常 → 用户看到的是
+     * "A JavaScript error occurred in the main process" 一屏堆栈，整个软件崩掉。
+     * 本来只是"这个源写不进去，换一个"，结果变成了"软件坏了"。
+     */
+    out.on('error', (e) => {
+      streamError = e;
+      wakeOnStreamError(e);
+      /* 数据已经没人要了，别接着从网上拉 */
+      try { controller.abort(); } catch (err) {}
+    });
+
+    reader = res.body && res.body.getReader ? res.body.getReader() : null;
     if (!reader) {
       /* 没有流式 body（老实现/桩）就整块拿：不常见，但要能兜住 */
       const buf = Buffer.from(await res.arrayBuffer());
-      await new Promise((resolve, reject) => {
-        out.on('error', reject);
-        out.on('finish', resolve);
-        out.end(buf);
-      });
+      await Promise.race([
+        new Promise((resolve) => { out.on('finish', resolve); out.end(buf); }),
+        streamFailed,
+      ]);
+      if (streamError) throw streamError;
       written = buf.length;
       onProgress({ received: written, total: total || written, percent: 100 });
       return { bytes: written };
     }
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      lastDataAt = Date.now();
-      const chunk = Buffer.from(value);
-      if (!out.write(chunk)) await new Promise((r) => out.once('drain', r));
-      written += chunk.length;
-      onProgress({
-        received: written,
-        total: total || 0,
-        percent: total ? Math.min(99, Math.floor((written / total) * 100)) : 0,
-      });
-    }
-    await new Promise((resolve, reject) => {
-      out.on('error', reject);
-      out.on('finish', resolve);
-      out.end();
-    });
+
+    /* 边读边写；写入流一旦死掉就立刻停手，不然会一直往一个坏掉的流里灌数据 */
+    const pump = (async () => {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        lastDataAt = Date.now();
+        const chunk = Buffer.from(value);
+        if (!out.write(chunk)) {
+          await new Promise((resolve) => {
+            out.once('drain', resolve);
+            /* 流已经死了就别等 drain 了 —— 那会永远等下去 */
+            streamFailed.then(resolve);
+          });
+        }
+        written += chunk.length;
+        onProgress({
+          received: written,
+          total: total || 0,
+          percent: total ? Math.min(99, Math.floor((written / total) * 100)) : 0,
+        });
+      }
+    })();
+
+    await Promise.race([pump, streamFailed]);
+    if (streamError) throw streamError;
+
+    await Promise.race([
+      new Promise((resolve) => { out.on('finish', resolve); out.end(); }),
+      streamFailed,
+    ]);
+    if (streamError) throw streamError;
+
     /* 完整性检查：拿到总长就必须对得上，否则换源重下（半截文件装上去就是坏的） */
     if (total && written !== total) throw new Error(`下载不完整：期望 ${total} 字节，实际 ${written} 字节`);
     onProgress({ received: written, total: total || written, percent: 100 });
     return { bytes: written };
+  } catch (e) {
+    /* 写不进去的那类错误翻译成人话再往上报；网络错误原样保留（"连接被重置"本来就清楚） */
+    if (e && (e.code === 'EPERM' || e.code === 'EACCES' || e.code === 'EBUSY' ||
+              e.code === 'ENOSPC' || e.code === 'ENOENT' || e.code === 'EROFS')) {
+      log(`写文件失败：${(e && e.message) || e}`);
+      throw new Error(describeWriteError(e, dest));
+    }
+    throw e;
   } finally {
     clearInterval(watchdog);
+    /* 出错时把 fd 和连接都放掉。不放的话文件一直被这个死掉的流占着，
+       Windows 上会变成"换下一个源还是 EPERM"，每个源都白试一遍。 */
+    if (reader && typeof reader.cancel === 'function') {
+      try { await reader.cancel(); } catch (e) {}
+    }
+    if (out && !out.destroyed && typeof out.destroy === 'function') {
+      try { out.destroy(); } catch (e) {}
+    }
   }
 }
 
 module.exports = {
-  resolveMirrorUrl, DEFAULT_MIRRORS, mirrorUrl, probeMirrors, downloadWithFallback, downloadOne };
+  resolveMirrorUrl, DEFAULT_MIRRORS, mirrorUrl, probeMirrors, downloadWithFallback, downloadOne,
+  describeWriteError };

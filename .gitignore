@@ -16,6 +16,8 @@ installer/out/
 installer/out_*/
 installer/release_*/
 installer/payload/*.zip
+# 安装器载荷（卸载器 exe 也有 70MB，构建时生成，不能进仓库）
+installer/payload/
 installer/sfx/*.7z
 uninstaller/node_modules/
 uninstaller/out/
@@ -38,3 +40,5 @@ bin/*.sys
 Thumbs.db
 # 发布时由 scripts/changelog.js 生成的说明，不进仓库
 CHANGELOG_RELEASE.md
+# 构建时写入的版本/提交号
+renderer/build-info.js

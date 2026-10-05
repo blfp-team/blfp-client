@@ -352,6 +352,53 @@ function updateInstallerPath(assetName) {
   return path.join(app.getPath('temp'), safe);
 }
 
+/*
+ * 挑一个"现在真的写得进去"的安装包路径。
+ *
+ * 固定文件名是为了不堆积安装包，但有个副作用：Windows 上正在运行的 exe
+ * 既不能覆盖写也不能删。用户上一次更新完，安装程序可能还在收尾，
+ * 或者被杀软按着扫描 —— 这时按固定名字去打开就是 EPERM。
+ * 所以先拿一个字节试一下；写不进去就退到带时间戳的唯一名字，
+ * 让这次更新照样能装完，而不是把用户卡死在"更新失败"。
+ */
+function resolveInstallerDest(assetName) {
+  const primary = updateInstallerPath(assetName);
+  try {
+    const fd = fs.openSync(primary, 'w');
+    fs.closeSync(fd);
+    return primary;
+  } catch (e) {
+    const base = path.basename(primary).replace(/\.exe$/i, '');
+    const unique = path.join(
+      path.dirname(primary),
+      base + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + '.exe',
+    );
+    console.log('[更新] 临时安装包写不进去（' + ((e && e.message) || e) + '），改用 ' + path.basename(unique));
+    return unique;
+  }
+}
+
+/*
+ * 唯一名字的安装包不会被自动覆盖，得自己清 —— 否则临时目录会被几个 200MB 撑满。
+ * 只删我们自己的、超过一天的；删不掉的（正在运行）直接跳过。
+ */
+function sweepOldInstallers(keepPath) {
+  const dir = app.getPath('temp');
+  let names;
+  try { names = fs.readdirSync(dir); } catch (e) { return; }
+  const cutoff = Date.now() - 24 * 3600 * 1000;
+  for (const name of names) {
+    if (!/^BLFP-Setup.*\.exe$/i.test(name)) continue;
+    const full = path.join(dir, name);
+    if (keepPath && full === keepPath) continue;
+    try {
+      if (fs.statSync(full).mtimeMs > cutoff) continue;
+      fs.unlinkSync(full);
+      console.log('[更新] 清理旧安装包 ' + name);
+    } catch (e) { /* 正在运行或被占用，跳过 */ }
+  }
+}
+
 /* 上次更新的结果记录在这里（安装器写、客户端启动时读）。
    放在 userData 下：同一个用户、同一个客户端，重启后一定读得到。 */
 function updateStatusFile() {
@@ -373,9 +420,12 @@ ipcMain.handle('start-update', async (evt, opts) => {
   const send = (payload) => { try { sender.send('update-progress', payload); } catch (e) {} };
 
   try {
-    const dest = updateInstallerPath(assetName);
+    const dest = resolveInstallerDest(assetName);
+    sweepOldInstallers(dest);
     /* 上次留下的半截文件会让"完整性检查"误判，先清掉 */
-    try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
+    try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {
+      console.log('[更新] 旧的临时安装包删不掉（' + ((e && e.message) || e) + '），继续');
+    }
 
     send({ phase: 'probe', percent: 0, text: '正在选择下载源…' });
     const result = await downloadWithFallback({
@@ -615,6 +665,24 @@ ipcMain.handle('set-custom-titlebar', async (_e, opts) => {
       require('fs').writeFileSync(LOG_PATH, '=== BLFP 运行日志 ===\r\n');
     }
   }
+  /* 主进程兜底：没被接住的异常绝不把原始报错框糊到用户脸上。
+     真实踩过：更新时临时安装包被占用 → 写入流的 'error' 没人听 → 主进程未捕获异常，
+     用户看到一屏 JS 堆栈，只能来问我们"这是什么"。这里统一记进日志（带堆栈），
+     再给一句人话 —— 用户至少知道去哪儿看、要不要重启。 */
+  process.on('uncaughtException', (err) => {
+    try {
+      ensureLogDir();
+      require('fs').appendFileSync(LOG_PATH, '[崩溃] ' + ((err && err.stack) || String(err)) + '\r\n');
+    } catch (e) {}
+    try {
+      require('electron').dialog.showErrorBox(
+        'BLFP 遇到一个内部错误',
+        '原因：' + ((err && err.message) || String(err)) +
+        '\n\n详细信息已写入日志：\n' + LOG_PATH +
+        '\n\n界面如果不正常，请重启 BLFP。'
+      );
+    } catch (e) {}
+  });
   ipcMain.handle('append-log', async (_e, lines) => {
     try {
       ensureLogDir();
