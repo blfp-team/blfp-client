@@ -1,6 +1,6 @@
 {
   "name": "blfp-installer",
-  "version": "2.4.0-pre.10",
+  "version": "2.4.0-pre.11",
   "description": "BLFP 客户端安装程序",
   "main": "main.js",
   "scripts": {
