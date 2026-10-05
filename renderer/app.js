@@ -1357,6 +1357,34 @@ function sendSignal(obj) {
   }
 }
 
+/*
+ * 建房消息统一从这里发，为的是能"退一步重试"。
+ *
+ * 背景（真实事故）：服务端 validateMessage 用的是**严格字段白名单**，
+ * 而 description / mcVersion / password 这三个房主自定义字段当初只在客户端加了，
+ * 服务端那份改动一直没提交、也就没部署。于是客户端每次建房都多带三个字段，
+ * 线上服务端一看白名单对不上，整条 create 判"非法消息格式" —— 房间根本建不起来，
+ * FRP 和 EasyTier 两种模式一起挂。
+ *
+ * 所以：服务端不认就摘掉这三个字段再发一次，至少让房间能建起来（功能降级），
+ * 而不是让用户完全用不了。服务端部署到位后第一次就能成功，走不到这条重试。
+ */
+let pendingCreate = null;
+function sendCreate(payload) {
+  pendingCreate = { payload, retried: false };
+  sendSignal(payload);
+}
+function retryCreateWithoutCustomFields() {
+  if (!pendingCreate || pendingCreate.retried) return false;
+  const p = pendingCreate.payload;
+  if (p.description === undefined && p.mcVersion === undefined && p.password === undefined) return false;
+  const { description, mcVersion, password, ...basic } = p;
+  pendingCreate.retried = true;
+  logLine('服务端不认房主自定义信息，可能版本较旧，去掉简介/版本/密码后重试建房');
+  sendSignal(basic);
+  return true;
+}
+
 function handleSignal(msg) {
   const safeAsync = (promise, label) => Promise.resolve(promise).catch((e) => {
     logLine(`${label}: ${e.message}`);
@@ -1395,7 +1423,20 @@ function handleSignal(msg) {
       toast(msg.error, 'error');
       logLine('信令错误: ' + msg.error);
       if (state.role === 'guest' && !state.roomInfo) safeAsync(failGuestConnection(msg.error || '加入房间失败'), '清理访客连接失败');
-      if (!state.roomCode && state.role === 'host') state.role = null;
+      if (!state.roomCode && state.role === 'host') {
+        /* 服务端不认新字段就先摘掉再试一次（见 sendCreate 上面的说明） */
+        if (/非法消息格式/.test(msg.error || '') && retryCreateWithoutCustomFields()) break;
+        state.role = null;
+        /* 建房失败必须把已经拉起来的 frp 隧道关掉。
+           隧道是在发 create **之前**就起来的，而服务端的错误是**异步**回来的，
+           createFrpRoom 的 catch 接不到 —— 不关的话它一直占着一个公网端口，
+           用户重试一次就多一个，看到的现象就是"一直在启动 FRPC"（真实踩过）。 */
+        if (state.frpNode || state.frpTunnelName) {
+          state.frpNode = null;
+          state.frpTunnelName = '';
+          safeAsync(window.mclink.frpcStop(), '关闭残留的 frp 隧道失败');
+        }
+      }
       $('btn-create').disabled = false;
       $('quick-host-confirm').disabled = false;
       $('btn-join').disabled = false;
@@ -1429,11 +1470,17 @@ function setHostCreatingText(text) {
    EasyTier 与 FRP 两条建房路径共用这一份，避免各写一遍导致两边漂移。
    长度上限与服务端 security-logic.js 的 ROOM_TEXT_LIMITS 保持一致。 */
 function hostCustomFields() {
-  return {
-    description: ($('host-desc')?.value || '').trim().slice(0, 200),
-    mcVersion: ($('host-version')?.value || '').trim().slice(0, 32),
-    password: ($('host-password')?.value || '').slice(0, 64),
-  };
+  /* 只在真的填了的时候才带上：空字符串没有意义，而且老版服务端的字段白名单里
+     没有这三个字段，带上就会把整条 create 判成"非法消息格式"。
+     不填的用户因此不受新旧服务端版本差的影响。 */
+  const out = {};
+  const description = ($('host-desc')?.value || '').trim().slice(0, 200);
+  const mcVersion = ($('host-version')?.value || '').trim().slice(0, 32);
+  const password = ($('host-password')?.value || '').slice(0, 64);
+  if (description) out.description = description;
+  if (mcVersion) out.mcVersion = mcVersion;
+  if (password) out.password = password;
+  return out;
 }
 
 async function createRoom(options = {}) {
@@ -1459,7 +1506,7 @@ async function createRoom(options = {}) {
     setHostCreatingText('正在创建房间…');
     state.role = 'host';
     state.isPublic = !!(options.isPublic ?? $('host-public')?.checked);
-    sendSignal({ type: 'create', mode: 'easytier', username: state.user.username, userId: state.user.id, mcPort: port, isPublic: state.isPublic, ...hostCustomFields() });
+    sendCreate({ type: 'create', mode: 'easytier', username: state.user.username, userId: state.user.id, mcPort: port, isPublic: state.isPublic, ...hostCustomFields() });
   } catch (e) {
     toast(e.message, 'error');
     button.disabled = false;
@@ -1705,7 +1752,7 @@ async function createFrpRoom(button = $('btn-create')) {
     await connectSignaling();
     state.role = 'host';
     state.frpNode = node;
-    sendSignal({
+    sendCreate({
       type: 'create',
       mode: 'frp',
       userId: state.user.id,
