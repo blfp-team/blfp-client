@@ -33,12 +33,37 @@
 
 const { isPrerelease } = require('./version-lib');
 
-/* 默认地址。可以用环境变量覆盖，换服务器不用重新打包。 */
-const DEFAULT_DOWNLOAD_SERVER = 'http://47.103.142.240:8080';
+/* 默认地址。可以用环境变量覆盖，换服务器不用重新打包。
+   ⚠️ 必须是 https：这份 JSON 里带着"去哪儿下载安装包"，明文取等于把
+   下载地址交给中间人改。客户端对自家服务器钉了证书（main.js 的 MIRROR_HOSTS），
+   走 https 才能用上那个钉。 */
+const DEFAULT_DOWNLOAD_SERVER = 'https://47.103.142.240:8443';
 
 function downloadServerBase(explicit) {
   const raw = explicit || process.env.BLFP_UPDATE_SERVER || DEFAULT_DOWNLOAD_SERVER;
   return String(raw).replace(/\/+$/, '');
+}
+
+/** 取地址的主机名；不是 http(s) 绝对地址就返回 null */
+function urlHost(raw) {
+  if (!/^https?:\/\//i.test(String(raw || ''))) return null;
+  try { return new URL(String(raw)).hostname.toLowerCase(); } catch (e) { return null; }
+}
+
+/**
+ * 服务器给的绝对地址是不是指向"我们自己配的那台下载服务器"。
+ *
+ * 为什么必须查：这段 JSON 的来源是下载服务器，而服务器可以被换掉、被劫持、
+ * 或者只是配错了。客户端拿到 downloadUrl 就直接下载的话，
+ * 一个 `https://evil.example/x.exe`（攻击者用一张正常 CA 签的证书）就能装进用户机器 ——
+ * 因为 updateFetch 只对 MIRROR_HOSTS 里的主机钉证书，别的主机退回全局 fetch。
+ * 所以：主机跟配置的下载服务器不一致就**不信这个地址**，按 base 自己拼。
+ */
+function isOurDownloadHost(raw, base) {
+  const h = urlHost(raw);
+  if (!h) return false;
+  const baseHost = urlHost(base) || urlHost(DEFAULT_DOWNLOAD_SERVER);
+  return !!baseHost && h === baseHost;
 }
 
 function serverLatestUrl(base) {
@@ -91,9 +116,12 @@ function pickServerRelease(payload, options = {}) {
 
   /* 地址优先级：服务器给的 downloadUrl → 自己拼的 /download/<文件名> → directUrl(/files/)。
      为什么把"自己拼"排在 directUrl 前面：/download/ 是支持 Range 断点续传的入口，
-     而 /files/ 是静态直链，不一定支持。安装包 257MB，能续传很重要。 */
-  const pick = usable.find((f) => /^https?:\/\//i.test(f.downloadUrl || '')) || usable[0];
-  const downloadUrl = /^https?:\/\//i.test(pick.downloadUrl || '')
+     而 /files/ 是静态直链，不一定支持。安装包 257MB，能续传很重要。
+
+     ⚠️ 服务器给的地址必须先过 isOurDownloadHost：只有主机就是"我们配的那台"才采信，
+     否则一律按 base 自己拼。见 isOurDownloadHost 上面的说明。 */
+  const pick = usable.find((f) => isOurDownloadHost(f.downloadUrl, options.base)) || usable[0];
+  const downloadUrl = isOurDownloadHost(pick.downloadUrl, options.base)
     ? pick.downloadUrl
     : serverDownloadUrl(pick.name, options.base);
 
@@ -156,4 +184,5 @@ module.exports = {
   isInstallerAsset,
   pickServerRelease,
   fetchServerRelease,
+  isOurDownloadHost,
 };

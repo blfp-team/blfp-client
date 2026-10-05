@@ -208,3 +208,64 @@ test('主进程不能调用渲染层才有的 logLine（会在运行时直接抛
     "main.js 的日志约定是 console.log('[更新] ' + m)");
 });
 
+
+/* ================= 服务器给的下载地址不能照单全收 ================= */
+
+/*
+ * 真实存在的洞（v2.4.0-pre.7 之前）：
+ *   客户端的更新元数据是**明文 HTTP** 取的（http://47.103.142.240:8080/api/latest），
+ *   而那份 JSON 里的 downloadUrl 会被原样拿去下载，**完全不校验主机**。
+ *   于是中间人只要污染那一次明文请求，塞一个
+ *     "downloadUrl": "https://evil.example/BLFP-Setup.exe"
+ *   就能让客户端从攻击者的机器上下载 —— 而 updateFetch 只对 MIRROR_HOSTS 里的主机
+ *   钉证书，别的主机退回全局 fetch（系统 CA），攻击者用一张正常证书就通过了。
+ *   之前那套 TLS + 钉证书被整个绕过，最终结果是用户机器上跑起攻击者的安装包。
+ *
+ * 两道修：元数据走 https（钉证书），并且只信"主机就是我们配的那台"的地址。
+ */
+test('下载地址的主机不是我们自己那台时，一律不信、按 base 自己拼', () => {
+  const payload = {
+    tag: 'v9.9.9',
+    files: [{ name: 'BLFP-Setup-v9.9.9.exe', downloaded: true, verified: true,
+              downloadUrl: 'https://evil.example/BLFP-Setup-v9.9.9.exe' }],
+  };
+  const r = src.pickServerRelease(payload, { channel: 'test', base: 'https://47.103.142.240:8443' });
+  assert.ok(r, '不该整个丢掉这个版本（那样正式用户就收不到更新了）');
+  assert.equal(/evil\.example/.test(r.downloadUrl), false,
+    '把攻击者给的下载地址原样拿去用了：' + r.downloadUrl);
+  assert.match(r.downloadUrl, /^https:\/\/47\.103\.142\.240:8443\/download\//,
+    '应该按自己配的 base 重新拼地址，实际：' + r.downloadUrl);
+});
+
+test('自家下载服务器给的地址要原样采信（别把正常路径也堵死）', () => {
+  const url = 'https://47.103.142.240:8443/download/BLFP-Setup-v9.9.9.exe';
+  const payload = {
+    tag: 'v9.9.9',
+    files: [{ name: 'BLFP-Setup-v9.9.9.exe', downloaded: true, verified: true, downloadUrl: url }],
+  };
+  const r = src.pickServerRelease(payload, { channel: 'test', base: 'https://47.103.142.240:8443' });
+  assert.equal(r.downloadUrl, url, '自家地址被改写了 —— 断点续传那个入口就白设了');
+});
+
+test('服务器一个地址都不给时，按 base 自己拼（老行为不能丢）', () => {
+  const payload = { tag: 'v9.9.9', files: [{ name: 'BLFP-Setup-v9.9.9.exe', downloaded: true }] };
+  const r = src.pickServerRelease(payload, { channel: 'test', base: 'https://47.103.142.240:8443' });
+  assert.equal(r.downloadUrl, 'https://47.103.142.240:8443/download/BLFP-Setup-v9.9.9.exe');
+});
+
+test('默认下载服务器必须是 https —— 明文元数据等于把下载地址交给中间人', () => {
+  assert.match(src.DEFAULT_DOWNLOAD_SERVER, /^https:\/\//,
+    '默认地址是 ' + src.DEFAULT_DOWNLOAD_SERVER +
+    '：这份 JSON 里带着"去哪儿下载安装包"，明文取的话中间人可以直接改掉它');
+});
+
+test('版本发现必须走 updateFetch（钉了证书），不能用全局 fetch', () => {
+  const i = MAIN.indexOf("ipcMain.handle('check-github-update'");
+  assert.ok(i > 0, '找不到 check-github-update');
+  const body = MAIN.slice(i, i + 1600);
+  const call = body.slice(body.indexOf('fetchServerRelease({'), body.indexOf('fetchServerRelease({') + 400);
+  assert.ok(/fetchImpl:\s*updateFetch/.test(call),
+    '问下载服务器时用的是全局 fetch —— 自签证书会被拒，于是只能退回明文 http；' +
+    '而且别的主机会用系统 CA，中间人塞的地址骗得过去');
+  assert.equal(/fetchImpl:\s*fetch\b/.test(call), false, '还在用全局 fetch');
+});

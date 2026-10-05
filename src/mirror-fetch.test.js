@@ -183,3 +183,39 @@ test('随包发布的镜像证书与预期一致（换证书必须是有意的�
   assert.ok(new Date(cert.validTo) > new Date('2031-01-01'),
     '证书有效期太短：换证书要跟着发客户端，别给自己找麻烦');
 });
+
+/*
+ * 为什么镜像 fetch 必须支持 json()：
+ *   更新元数据（/api/latest）里带着"去哪儿下载安装包"。以前这个方法不存在，
+ *   元数据只能退回**明文 http** 取 —— 中间人把 downloadUrl 换成自己的机器，
+ *   客户端就会去装他的包。补上 json() 之后元数据也能走这条钉了证书的 https。
+ */
+test('响应支持 json()，元数据才能走钉了证书的 https', async () => {
+  const payload = { tag: 'v9.9.9', files: [{ name: 'BLFP-Setup-v9.9.9.exe', downloaded: true }] };
+  const srv = await startTlsServer((req, res) => {
+    const text = JSON.stringify(payload);
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(text) });
+    res.end(text);
+  });
+  const mirrorFetch = createMirrorFetch({ ca: serverCert });
+  try {
+    const res = await mirrorFetch(`https://127.0.0.1:${srv.port}/api/latest`);
+    const got = await res.json();
+    assert.deepEqual(got, payload,
+      'response.json() 拿不到结果 —— 元数据就只能退回明文 http，钉证书白做');
+  } finally {
+    await srv.close();
+  }
+});
+
+test('json() 遇到非 JSON 要抛错，不能静默当空对象', async () => {
+  const srv = await startTlsServer(body('<html>502 Bad Gateway</html>'));
+  const mirrorFetch = createMirrorFetch({ ca: serverCert });
+  try {
+    const res = await mirrorFetch(`https://127.0.0.1:${srv.port}/api/latest`);
+    await assert.rejects(() => res.json(), /JSON/,
+      '静默返回空会被上层当成"服务器上没有新版本"，用户就收不到更新了');
+  } finally {
+    await srv.close();
+  }
+});

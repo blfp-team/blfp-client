@@ -62,6 +62,19 @@ function makeBody(stream) {
       stream.on('error', reject);
       stream.resume();
     }),
+    /* 查更新时要在 response 上调 json()。以前没有这个方法，所以元数据只能退回
+       明文 http —— 而那份 JSON 里带着"去哪儿下载安装包"，等于把地址交给中间人改。
+       补上之后元数据也能走钉了证书的 https。 */
+    json: () => new Promise((resolve, reject) => {
+      const chunks = [];
+      stream.on('data', (c) => chunks.push(c));
+      stream.on('end', () => {
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+        catch (e) { reject(new Error('下载服务器返回的不是合法 JSON：' + e.message)); }
+      });
+      stream.on('error', reject);
+      stream.resume();
+    }),
   };
 }
 
@@ -101,6 +114,8 @@ function createMirrorFetch({ ca, expect } = {}) {
           body: streamBody,
           /* update-download.js 是在 response 上调 arrayBuffer()，不是 body 上 —— 两边都给 */
           arrayBuffer: streamBody.arrayBuffer,
+          /* 查更新（/api/latest）是在 response 上调 json()，同样两边都给 */
+          json: streamBody.json,
         });
       });
       req.on('error', reject);

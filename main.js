@@ -511,7 +511,11 @@ ipcMain.handle('check-github-update', async (_e, channel) => {
      否则正式用户会被推去测试版。它挑不出合适的就返回 null，我们回退 GitHub。 */
   try {
     const fromServer = await fetchServerRelease({
-      fetchImpl: fetch,
+      /* ⚠️ 必须用 updateFetch 而不是全局 fetch：
+         自家下载服务器用的是自签证书，全局 fetch 会直接拒掉；
+         而且 updateFetch 对镜像主机钉了证书，伪造/中间人塞的元数据骗不过去。
+         这份 JSON 里带着"去哪儿下载安装包"，走明文等于把下载地址交给中间人改。 */
+      fetchImpl: updateFetch,
       channel: wantBeta ? 'test' : 'stable',
       log: (m) => console.log('[更新] ' + m),
     });
