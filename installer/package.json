@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dist": "node check-payload.js && electron-builder --win portable",
-    "test": "node --test install-core.test.js silent-mode.test.js"
+    "test": "node --test install-core.test.js silent-mode.test.js ui-text.test.js",
+    "make-splash": "node scripts/make-splash.js"
   },
   "author": "",
   "license": "MIT",
@@ -34,7 +35,14 @@
       "target": "portable",
       "artifactName": "BLFP-Setup-v${version}.exe",
       "icon": "icon.png",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "electronLanguages": [
+        "zh-CN",
+        "en-US"
+      ]
+    },
+    "portable": {
+      "splashImage": "splash.bmp"
     },
     "extraResources": [
       "payload/**"

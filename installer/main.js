@@ -1,9 +1,9 @@
 /* 全局异常兜底：避免任何未捕获异常弹出 "A JavaScript error occurred in the main process" 对话框 */
 process.on('uncaughtException', (err) => {
-  console.error('[安装器] 未捕获异常（已拦截）:', err && err.stack ? err.stack : err);
+  console.error('[安装器] 已拦截未捕获异常:', err && err.stack ? err.stack : err);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('[安装器] 未处理的 Promise 拒绝（已拦截）:', reason && reason.message ? reason.message : reason);
+  console.error('[安装器] 已拦截未处理的 Promise 拒绝:', reason && reason.message ? reason.message : reason);
 });
 
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
@@ -59,8 +59,8 @@ function payloadPath() {
 
   /* 全部失败：记录实际目录结构，便于定位 */
   const describe = (p) => {
-    try { return p + ' → ' + (fsx.existsSync(p) ? fsx.readdirSync(p).slice(0, 30).join(', ') : '(不存在)'); }
-    catch (e) { return p + ' → (读取失败)'; }
+    try { return p + ' → ' + (fsx.existsSync(p) ? fsx.readdirSync(p).slice(0, 30).join(', ') : '不存在'); }
+    catch (e) { return p + ' → 读取失败'; }
   };
   lastPayloadDiagnostic = [
     '未找到 payload.zip。候选路径检查结果：',
@@ -216,7 +216,8 @@ async function writeFileWithRetry(outPath, data, onRetry) {
   }
   throw new Error(
     '文件被占用，无法写入：' + outPath + '\n' +
-    '请手动退出 BLFP 客户端（含托盘图标）后重试安装。\n（' + (lastErr && lastErr.code) + '）'
+    '请手动退出 BLFP 客户端，包括右下角托盘里的图标，然后重试安装。\n' +
+    '错误码 ' + (lastErr && lastErr.code)
   );
 }
 
@@ -392,7 +393,7 @@ async function runInstall(opts) {
   const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : () => {};
 
   const zipFile = payloadPath();
-  if (!zipFile) throw new Error('安装包数据缺失（payload.zip 未找到）\n' + lastPayloadDiagnostic);
+  if (!zipFile) throw new Error('安装包数据缺失，没有找到 payload.zip\n' + lastPayloadDiagnostic);
 
   onProgress(2, '准备安装目录...');
   fs.mkdirSync(targetDir, { recursive: true });
@@ -403,7 +404,7 @@ async function runInstall(opts) {
     fs.writeFileSync(probe, 'ok');
     fs.unlinkSync(probe);
   } catch (e) {
-    throw new Error('安装目录不可写：' + targetDir + '\n请改用默认目录（%LOCALAPPDATA%\\Programs\\BLFP），或选择你有权限的目录。');
+    throw new Error('安装目录不可写：' + targetDir + '\n请改用默认安装位置，或换一个你有写权限的目录。');
   }
 
   /* ---- 秒关客户端 ----
@@ -417,12 +418,12 @@ async function runInstall(opts) {
     await taskkillElevated();
     let unlocked = await waitForUnlock(exeTarget, 4000);
     if (unlocked) {
-      onProgress(8, `已关闭客户端（${Date.now() - t0} 毫秒）`);
+      onProgress(8, `已关闭客户端，用时 ${Date.now() - t0} 毫秒`);
     } else {
       onProgress(6, '需要提权关闭客户端，请在弹窗点「是」…');
       await taskkillViaUac();
       unlocked = await waitForUnlock(exeTarget, 30000);
-      if (unlocked) onProgress(8, `已关闭客户端（${Date.now() - t0} 毫秒）`);
+      if (unlocked) onProgress(8, `已关闭客户端，用时 ${Date.now() - t0} 毫秒`);
       /* 仍未解锁也不再直接判失败：交给逐文件重试兜底 */
       else onProgress(8, '客户端似乎仍在运行，继续尝试覆盖安装…');
     }
@@ -457,8 +458,8 @@ async function runInstall(opts) {
     }
   );
   onProgress(12, plan.skipped > 0
-    ? `无需改动 ${plan.skipped} 个文件，正在写入 ${plan.toWrite} 个（${Math.round(plan.bytesToWrite / 1048576)} MB）...`
-    : `正在写入 ${plan.toWrite} 个文件（${Math.round(plan.bytesToWrite / 1048576)} MB）...`);
+    ? `无需改动 ${plan.skipped} 个文件，正在写入 ${plan.toWrite} 个文件，共 ${Math.round(plan.bytesToWrite / 1048576)} MB...`
+    : `正在写入 ${plan.toWrite} 个文件，共 ${Math.round(plan.bytesToWrite / 1048576)} MB...`);
 
   const total = plan.items.length || 1;
   let done = 0;
@@ -470,7 +471,7 @@ async function runInstall(opts) {
       fs.mkdirSync(path.dirname(item.outPath), { recursive: true });
       await writeFileWithRetry(item.outPath, item.entry.raw.getData(), (attempt) => {
         const pct = 12 + Math.floor(((done + 1) / total) * 76);
-        onProgress(pct, `正在解压文件 ${done + 1}/${total}（${path.basename(item.outPath)} 被占用，第 ${attempt} 次重试）...`);
+        onProgress(pct, `正在解压文件 ${done + 1}/${total}，${path.basename(item.outPath)} 被占用，第 ${attempt} 次重试...`);
       });
       written++;
     }
@@ -588,7 +589,7 @@ ipcMain.handle('launch', async (evt, exePath) => {
     return {
       ok: false,
       error: '未能启动 BLFP。\n' + ((e && e.message) || '未知错误') +
-        '\n请手动双击桌面上的 BLFP 快捷方式启动（弹出提示时请点「是」允许管理员权限）。',
+        '\n请手动双击桌面上的 BLFP 快捷方式启动。弹出提示时请点「是」允许管理员权限。',
     };
   }
 });

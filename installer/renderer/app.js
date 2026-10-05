@@ -40,7 +40,7 @@ async function runLoading() {
 
   /* 安装包异常时直接给出可读错误，而不是等安装到 80% 才失败 */
   if (info && !info.payloadOk) {
-    $('error-text').textContent = '安装包数据不完整（payload 缺失），请重新下载安装程序。\n\n' + (info.diagnostic || '');
+    $('error-text').textContent = '安装包数据不完整，请重新下载安装程序。\n\n' + (info.diagnostic || '');
     showStep('step-error');
     return;
   }

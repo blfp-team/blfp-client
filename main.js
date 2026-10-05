@@ -463,7 +463,7 @@ ipcMain.handle('start-update', async (evt, opts) => {
     }
 
     const mb = Math.round(result.bytes / 1048576);
-    send({ phase: 'install', percent: 100, text: `下载完成（${result.mirror}，${mb} MB），正在后台安装…` });
+    send({ phase: 'install', percent: 100, text: `下载完成，来源 ${result.mirror}，共 ${mb} MB，正在后台安装…` });
 
     /* 用隐藏的静默参数拉起安装器：不弹界面，由它在后台关客户端、装文件、再拉起来。
        必须确认真起来了才允许退出客户端 —— 客户端自己没提权时，
@@ -539,7 +539,7 @@ async function fetchGithubRelease(url, wantBeta) {
     });
     if (response.status === 404) throw new Error('仓库尚未发布 Release');
     if (response.status === 403 || response.status === 429) throw new Error('GitHub API 请求受限，请稍后再试');
-    if (!response.ok) throw new Error(`GitHub 更新检查失败 (${response.status})`);
+    if (!response.ok) throw new Error(`GitHub 更新检查失败，状态码 ${response.status}`);
     const body = await response.json();
     let release;
     if (wantBeta) {
@@ -618,7 +618,7 @@ ipcMain.handle('check-github-update', async (_e, channel) => {
       log: (m) => console.log('[更新] ' + m),
     });
     if (fromServer) {
-      console.log('[更新] 更新来源：BLFP 下载服务器（兜底）' + fromServer.latestVersion);
+      console.log('[更新] 更新来源：BLFP 下载服务器作为兜底 ' + fromServer.latestVersion);
       return fromServer;
     }
   } catch (e) {
@@ -738,7 +738,7 @@ ipcMain.handle('set-custom-titlebar', async (_e, opts) => {
       /* 超过 2MB 时轮转，避免无限增长 */
       try {
         if (require('fs').statSync(LOG_PATH).size > MAX_LOG_BYTES) {
-          require('fs').writeFileSync(LOG_PATH, '=== BLFP 运行日志（已轮转）===\r\n');
+          require('fs').writeFileSync(LOG_PATH, '=== BLFP 运行日志 已轮转 ===\r\n');
         }
       } catch (e) {}
       require('fs').appendFileSync(LOG_PATH, text + '\r\n');
@@ -855,7 +855,7 @@ function icmpPing(host, timeout = 3000) {
       require('child_process').execFile('ping', args, { timeout: timeout + 2000, windowsHide: true }, (err, stdout, stderr) => {
         const out = String(stdout || '') + String(stderr || '');
         const replied = /ttl[=|]/i.test(out) || /time[=<]\s*[\d.]+\s*ms/i.test(out) || /时间[=<]\s*[\d.]+\s*ms/i.test(out);
-        if (err && !replied) return resolve({ ok: false, unknown: true, error: 'ICMP 无响应（UDP 中继无法用 TCP 探测）' });
+        if (err && !replied) return resolve({ ok: false, unknown: true, error: 'ICMP 无响应，UDP 中继无法用 TCP 探测' });
         const m = out.match(/time[=<]\s*([\d.]+)\s*ms/i) || out.match(/时间[=<]\s*([\d.]+)\s*ms/i);
         const measured = m ? Math.round(Number(m[1])) : (Date.now() - start);
         resolve({ ok: true, latency: Number.isFinite(measured) ? measured : (Date.now() - start), method: 'icmp' });
@@ -1022,11 +1022,11 @@ ipcMain.handle('collect-diagnostics', async () => {
   add('系统', os.type() + ' ' + os.release() + ' ' + os.arch());
   add('Electron', process.versions.electron + '  Node ' + process.versions.node);
   add('安装路径', __dirname);
-  add('resourcesPath', process.resourcesPath || '(无)');
+  add('resourcesPath', process.resourcesPath || '无');
 
   /* 是否管理员 */
   const adminCheck = await runCapture('net', ['session']);
-  add('管理员权限', adminCheck.ok ? '是' : '否（虚拟网卡可能无法创建！）');
+  add('管理员权限', adminCheck.ok ? '是' : '否，虚拟网卡可能无法创建！');
 
   /* 运行文件 */
   const binDir = path.join(process.resourcesPath || '', 'bin');
@@ -1037,7 +1037,7 @@ ipcMain.handle('collect-diagnostics', async () => {
       const st = fs.statSync(path.join(binDir, f));
       add('  ' + f, (st.size / 1048576).toFixed(1) + ' MB');
     });
-    if (!files.length) add('  (空)', '缺少运行文件！');
+    if (!files.length) add('  空', '缺少运行文件！');
   } catch (e) { add('bin 目录', '不存在: ' + binDir); }
 
   /* 网卡（含 EasyTier 虚拟网卡） */
@@ -1048,16 +1048,16 @@ ipcMain.handle('collect-diagnostics', async () => {
       if (info && (info.family === 'IPv4' || info.family === 4)) ipv4.push(name + ' = ' + info.address);
     });
   });
-  add('网卡 IPv4', ipv4.length ? '\n    ' + ipv4.join('\n    ') : '(无)');
-  add('虚拟网卡', ipv4.some((s) => s.includes('10.200.')) ? '已创建' : '未创建（EasyTier 未运行或 TUN 失败）');
+  add('网卡 IPv4', ipv4.length ? '\n    ' + ipv4.join('\n    ') : '无');
+  add('虚拟网卡', ipv4.some((s) => s.includes('10.200.')) ? '已创建' : '未创建，EasyTier 未运行或 TUN 失败');
 
   /* 防火墙规则 */
   const fw = await runCapture('netsh', ['advfirewall', 'firewall', 'show', 'rule', 'name=BLFP 联机助手']);
-  add('防火墙规则', fw.out.includes('BLFP') ? '已存在' : '不存在（访客可能连不上）');
+  add('防火墙规则', fw.out.includes('BLFP') ? '已存在' : '不存在，访客可能连不上');
 
   /* 网络类别 */
   const prof = await runCapture('powershell', ['-NoProfile', '-Command', 'Get-NetConnectionProfile | Select-Object -Property InterfaceAlias,NetworkCategory | Format-Table -HideTableHeaders | Out-String']);
-  add('网络类别', '\n    ' + (prof.out || '(读取失败)').split('\n').filter(Boolean).join('\n    '));
+  add('网络类别', '\n    ' + (prof.out || '读取失败').split('\n').filter(Boolean).join('\n    '));
 
   /* 关键节点连通性 */
   for (const [label, host, port] of [['EasyTier 中继', '47.103.142.240', 11010]]) {
@@ -1073,9 +1073,9 @@ ipcMain.handle('collect-diagnostics', async () => {
       s.once('error', (e) => fin('失败 ' + (e.code || e.message)));
       try { s.connect(port, host); } catch (e) { fin('失败 ' + e.message); }
     });
-    add(label + ' (' + host + ':' + port + ')', res);
+    add(label + ' ' + host + ':' + port, res);
   }
-  add('服务器 (' + (process.env.BLFP_SERVER || '154.40.43.136:4000') + ')', '(由客户端测速)');
+  add('服务器 ' + (process.env.BLFP_SERVER || '154.40.43.136:4000'), '由客户端测速');
 
   /* 日志尾部 */
   try {

@@ -135,7 +135,7 @@ async function refreshLogViewer() {
   try {
     const res = await window.mclink.readLog(500);
     if (res && res.ok) {
-      pre.textContent = res.text || '（日志为空）';
+      pre.textContent = res.text || '日志为空';
       pre.scrollTop = pre.scrollHeight;
     } else {
       pre.textContent = '读取日志失败：' + ((res && res.error) || '未知错误');
@@ -188,7 +188,7 @@ function askElevation(what) {
     const t = $('confirm-title');
     const m = $('confirm-msg');
     if (t) t.textContent = '需要管理员权限';
-    if (m) m.textContent = what + ' 需要创建虚拟网卡，必须以管理员身份运行。\n\n点「确定」以管理员身份重启客户端（重启后请重新操作）；点「取消」则保持当前权限（EasyTier 无法使用，可改用 frp 中转模式）。';
+    if (m) m.textContent = what + ' 需要创建虚拟网卡，必须以管理员身份运行。\n\n点「确定」会以管理员身份重启客户端，重启后请重新操作。点「取消」则保持当前权限，此时 EasyTier 用不了，可以改用 frp 中转模式。';
     openModal('confirm-modal');
     /* 与 showConfirm 共用同一套安全设置：不再直接往 $('confirm-cancel') 上写属性 */
     setConfirmHandlers(() => finish('elevate'), () => finish('cancel'));
@@ -1034,14 +1034,14 @@ async function probeNode(peer) {
     return { state: 'unreachable', ms: null, error: '节点地址无法解析：' + String(peer == null ? '' : peer) };
   }
   if (!window.mclink || typeof window.mclink.pingNode !== 'function') {
-    return { state: 'unknown', ms: null, error: '客户端接口不可用（pingNode 未注入，请重启客户端）' };
+    return { state: 'unknown', ms: null, error: '客户端接口不可用，请重启客户端' };
   }
   try {
     /* udp 中继没法用 TCP 连接判断可用性，交给主进程做主机级探测 */
     const res = await window.mclink.pingNode({ host: target.host, port: target.port, protocol: target.protocol });
     if (res && res.ok) return { state: 'ok', ms: Number(res.latency), error: '' };
     if (res && res.unknown) {
-      return { state: 'unknown', ms: null, error: (res && res.error) || '无法判定（UDP 中继不支持 TCP 探测）' };
+      return { state: 'unknown', ms: null, error: (res && res.error) || '无法判定：UDP 中继不支持 TCP 探测' };
     }
     return { state: 'unreachable', ms: null, error: (res && res.error) || '未知错误' };
   } catch (e) {
@@ -1065,7 +1065,7 @@ async function loadEtNodes(options = {}) {
       const nodes = await api('/easytier-nodes/client');
       state.etNodes = Array.isArray(nodes) ? nodes : [];
       if (sel) {
-        const opts = ['<option value="auto">自动（选择延迟最低的节点）</option>'];
+        const opts = ['<option value="auto">自动选择延迟最低的节点</option>'];
         state.etNodes.forEach((n) => {
           const kind = n.kind === 'signaling' ? '信令' : '中继';
           opts.push(`<option value="${n.id}">${escapeHtml(n.name)}（${kind}）</option>`);
@@ -1112,10 +1112,10 @@ async function testEtNodes() {
     /* 测速探不出 ≠ 节点不能用：UDP 中继无法用 TCP 探测，不能因此显示成"无可用节点"误导用户 */
     badge.textContent = best
       ? `最低延迟：${best.node.name} ${best.probe.ms} ms`
-      : '未测出延迟（节点仍可用于连接）';
+      : '未测出延迟，节点仍可用于连接';
   }
-  if (best) logLine(`EasyTier 测速完成，最低延迟节点: ${best.node.name} (${best.probe.ms} ms)`);
-  else logLine('EasyTier 测速：均未测出延迟，将按原顺序尝试连接（测速失败不代表节点不可用）');
+  if (best) logLine(`EasyTier 测速完成，最低延迟节点 ${best.node.name}，${best.probe.ms} ms`);
+  else logLine('EasyTier 测速：均未测出延迟，将按原顺序尝试连接。测速失败不代表节点不可用');
 }
 
 async function pickBestEtPeer(peers) {
@@ -1127,7 +1127,7 @@ async function pickBestEtPeer(peers) {
   results.sort((a, b) => (rank[a.probe.state] - rank[b.probe.state]) || ((a.probe.ms ?? Infinity) - (b.probe.ms ?? Infinity)));
   const ordered = results.map((r) => r.peer);
   if (results[0].probe.state === 'ok') {
-    logLine(`EasyTier 首选节点 ${ordered[0]} (${results[0].probe.ms} ms)，其余 ${ordered.length - 1} 个作为备用`);
+    logLine(`EasyTier 首选节点 ${ordered[0]}，${results[0].probe.ms} ms，其余 ${ordered.length - 1} 个作为备用`);
   } else {
     logLine('EasyTier 未测出可用延迟，按原顺序尝试全部节点');
   }
@@ -1146,10 +1146,10 @@ async function resolveEtPeers(peers) {
       if (matched) {
         /* 指定节点排在第一位，其余保留为备用：万一指定中继临时不通，仍能连上房间 */
         const rest = peers.filter((p) => p !== matched);
-        logLine(`使用指定 EasyTier 节点: ${node.name}（${node.peer}）` + (rest.length ? `，另有 ${rest.length} 个备用节点` : ''));
+        logLine(`使用指定 EasyTier 节点 ${node.name}，地址 ${node.peer}` + (rest.length ? `，另有 ${rest.length} 个备用节点` : ''));
         return [matched, ...rest];
       }
-      logLine(`指定 EasyTier 节点 ${node.name}（${node.peer}）不在本次房间的节点列表中，改为自动选择`);
+      logLine(`指定 EasyTier 节点 ${node.name} 不在本次房间的节点列表中，改为自动选择`);
     }
   }
   return pickBestEtPeer(peers);
@@ -1666,7 +1666,7 @@ async function createFrpRoom(button = $('btn-create')) {
       });
       if (proxy && proxy.ok && proxy.port) {
         localPort = proxy.port;
-        logLine('MC 探测代理已启动，端口 ' + proxy.port + '（服务器列表将显示 BLFP）');
+        logLine('MC 探测代理已启动，端口 ' + proxy.port + '，服务器列表将显示 BLFP');
       } else {
         logLine('MC 探测代理未启动，将直连 MC：' + ((proxy && proxy.error) || '未知原因'));
       }
@@ -1874,7 +1874,7 @@ function confirmStartHost() {
   } else {
     port = parseInt(portEl ? portEl.value : state.mcPort, 10);
     if (!port || port < 1 || port > 65535) {
-      toast('请输入有效的端口号 (1-65535)', 'error');
+      toast('请输入有效的端口号，范围 1 到 65535', 'error');
       return;
     }
     if ($('mc-port')) $('mc-port').value = port;
@@ -1938,7 +1938,7 @@ async function joinRoom() {
     if (state.joinTimer) clearTimeout(state.joinTimer);
     state.joinTimer = setTimeout(() => {
       if (state.role === 'guest' && !state.roomInfo) {
-        failGuestConnection('加入房间超时，请重试（房间可能已关闭或网络不稳定）');
+        failGuestConnection('加入房间超时，房间可能已关闭或网络不稳定，请重试');
       }
       state.joinTimer = null;
     }, 15000);
@@ -1986,7 +1986,7 @@ async function onRoomJoined(msg) {
   if (!msg.easytier?.hostVirtualIp) throw new Error('服务端未返回 EasyTier 房主地址');
   /* 访客接入 EasyTier 同样需要管理员权限 */
   if (!(await ensureElevatedForEasyTier('加入 EasyTier 房间'))) {
-    await failGuestConnection('EasyTier 需要管理员权限，请以管理员身份重启客户端后重试（或让房主改用 frp 模式）');
+    await failGuestConnection('EasyTier 需要管理员权限，请以管理员身份重启客户端后重试，或让房主改用 frp 模式');
     return;
   }
   const address = msg.easytier.hostVirtualIp + ':' + (msg.easytier.port || 25565);
@@ -2007,8 +2007,8 @@ async function onRoomJoined(msg) {
       new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: test?.error || '连接超时' }), remaining)),
     ]);
     if (test?.ok) break;
-    logLine('EasyTier 连通性测试未通过: ' + (test?.error || '未知原因') + '（重试中）');
-    notify('正在等待 EasyTier 网络连通... (' + (test?.error || '重试中') + ')');
+    logLine('EasyTier 连通性测试未通过: ' + (test?.error || '未知原因') + '，重试中');
+    notify('正在等待 EasyTier 网络连通... ' + (test?.error || '重试中'));
     const retryDelay = Math.min(Math.max(0, 1000 - (Date.now() - attemptStarted)), deadline - Date.now());
     if (retryDelay > 0) await new Promise((resolve) => setTimeout(resolve, retryDelay));
   }
@@ -2182,14 +2182,14 @@ async function loadAnnouncement() {
     const button = $('announcement-close');
     let remaining = Math.max(0, Number(announcement.forceSeconds) || 0);
     button.disabled = remaining > 0;
-    button.textContent = remaining > 0 ? `请阅读（${remaining}s）` : '我知道了';
+    button.textContent = remaining > 0 ? `请阅读 ${remaining} 秒` : '我知道了';
     openModal('announcement-modal');
     if (state.announcementTimer) clearInterval(state.announcementTimer);
     if (remaining > 0) {
       state.announcementTimer = setInterval(() => {
         remaining -= 1;
         button.disabled = remaining > 0;
-        button.textContent = remaining > 0 ? `请阅读（${remaining}s）` : '我知道了';
+        button.textContent = remaining > 0 ? `请阅读 ${remaining} 秒` : '我知道了';
         if (remaining <= 0) { clearInterval(state.announcementTimer); state.announcementTimer = null; }
       }, 1000);
     }
@@ -2255,7 +2255,7 @@ async function checkForUpdates() {
       return;
     }
     if (info.latestVersion && compareVersions(info.latestVersion, state.appInfo.version) > 0) {
-      const tag = info.prerelease && channel === 'test' ? '（测试版）' : '';
+      const tag = info.prerelease && channel === 'test' ? ' 测试版' : '';
       $('update-title').textContent = `发现新版本 ${info.latestVersion}${tag}`;
       $('update-notes').textContent = info.releaseNotes || '暂无更新说明';
       $('update-download').textContent = info.downloadUrl ? '立即更新' : '打开发布页';
@@ -2791,7 +2791,7 @@ async function copyRoomAddress(code) {
 
   try {
     await navigator.clipboard.writeText(address);
-    toast('已复制连接地址：' + address + '（在 Minecraft 里直接连接）', 'success');
+    toast('已复制连接地址：' + address + '，在 Minecraft 里直接连接', 'success');
   } catch (e) {
     toast('复制失败，地址是：' + address, 'warn');
   }
@@ -3353,7 +3353,7 @@ async function exportDiagnostics() {
     let copied = false;
     try { await navigator.clipboard.writeText(text); copied = true; } catch (e) {}
     showModal('diag-modal',
-      '<h3>诊断信息' + (copied ? '（已复制到剪贴板）' : '') + '</h3>' +
+      '<h3>诊断信息' + (copied ? ' 已复制到剪贴板' : '') + '</h3>' +
       '<p style="font-size:.78rem;color:var(--text2);margin-bottom:10px">把下面内容整段发给开发者，即可定位这台机器与正常机器的差异。</p>' +
       '<pre class="diag-pre">' + escapeHtml(text) + '</pre>' +
       '<div class="modal-actions">' +
@@ -3476,13 +3476,13 @@ async function showRoomDetail(code) {
     const isFrp = room.mode === 'frp';
     const address = room.frp_host && room.frp_port ? room.frp_host + ':' + room.frp_port : '';
     const addrHtml = isFrp
-      ? `<div style="margin-top:10px"><div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">直连地址（在 Minecraft 里直接连接）</div><div class="room-detail-addr">${address ? escapeHtml(address) : (room.has_password ? '需要密码，点下方按钮获取' : '房主正在建立隧道…')}</div></div>`
+      ? `<div style="margin-top:10px"><div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">直连地址，在 Minecraft 里直接连接</div><div class="room-detail-addr">${address ? escapeHtml(address) : (room.has_password ? '需要密码，点下方按钮获取' : '房主正在建立隧道…')}</div></div>`
       : '';
     /* FRP 访客不用进房间，复制地址即可；EasyTier 仍然要走加入流程拿虚拟网地址 */
     const actionBtn = isFrp
       ? `<button class="btn btn-primary btn-sm" onclick="closeModal('room-detail-modal');copyRoomAddress('${code}')">${address ? '复制地址' : '输密码取地址'}</button>`
       : `<button class="btn btn-primary btn-sm" onclick="closeModal('room-detail-modal');quickJoinRoom('${code}')">加入房间</button>`;
-    showModal('room-detail-modal', `<h3>房间 ${escapeHtml(code)} 详情</h3>` + (fallbackUsed ? '<div style="font-size:.75rem;color:var(--warn);margin-bottom:8px">服务器未提供详情接口，以下为房间列表数据（更新服务器后可显示成员与延迟）</div>' : '') + `<div class="room-detail-grid">` + statsHtml + versionHtml + `</div>` + descHtml + addrHtml + `<div style="font-size:.78rem;color:var(--text3);margin:10px 0 6px">在线成员</div><div class="room-detail-members">` + membersHtml + `</div><div class="modal-actions"><button class="btn btn-outline btn-sm" onclick="closeModal('room-detail-modal')">关闭</button>` + actionBtn + `</div>`);
+    showModal('room-detail-modal', `<h3>房间 ${escapeHtml(code)} 详情</h3>` + (fallbackUsed ? '<div style="font-size:.75rem;color:var(--warn);margin-bottom:8px">服务器未提供详情接口，以下为房间列表数据。更新服务器后可显示成员与延迟</div>' : '') + `<div class="room-detail-grid">` + statsHtml + versionHtml + `</div>` + descHtml + addrHtml + `<div style="font-size:.78rem;color:var(--text3);margin:10px 0 6px">在线成员</div><div class="room-detail-members">` + membersHtml + `</div><div class="modal-actions"><button class="btn btn-outline btn-sm" onclick="closeModal('room-detail-modal')">关闭</button>` + actionBtn + `</div>`);
   } catch (e) {
     toast('获取房间详情失败: ' + e.message, 'error');
   }
@@ -3748,7 +3748,7 @@ function loadGeetestSdk() {
     s.async = true;
     const timer = setTimeout(() => reject(new Error('极验 SDK 加载超时')), 8000);
     s.onload = () => { clearTimeout(timer); window.initGeetest4 ? resolve() : reject(new Error('极验 SDK 未初始化')); };
-    s.onerror = () => { clearTimeout(timer); reject(new Error('极验 SDK 加载失败（可能被 CSP 或网络拦截）')); };
+    s.onerror = () => { clearTimeout(timer); reject(new Error('极验 SDK 加载失败，可能被 CSP 或网络拦截')); };
     document.head.appendChild(s);
   }).catch((e) => { loadGeetestSdk._p = null; throw e; });
   return loadGeetestSdk._p;
@@ -3786,7 +3786,7 @@ function switchToBuiltinCaptcha(slot) {
   st.geetest = null;
   st.validate = null;
   st.answer = '';
-  logLine('极验不可用（网络不给力/接口异常），已改用图片验证码');
+  logLine('极验不可用，已改用图片验证码');
   renderBuiltinCaptcha(slot, st.fallback.token, st.fallback.image);
   return true;
 }
