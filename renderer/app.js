@@ -10,7 +10,7 @@ const SERVER_CANDIDATES = [
 const CHAT_SERVER_CANDIDATES = [
   'http://154.40.43.136:4001',
 ];
-const GITHUB_REPO_URL = 'https://github.com/EVFBV/BLFP-client';
+const GITHUB_REPO_URL = 'https://github.com/blfp-team/blfp-client';
 const state = {
   server: DEFAULT_SERVER,
   chatServer: DEFAULT_CHAT_SERVER,   // 聊天/公告专用服务器

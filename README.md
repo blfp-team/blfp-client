@@ -2,7 +2,7 @@
 
 BLFP 是面向 Minecraft Java 版的联机客户端。无需公网 IP：房主一键开房，好友输入 6 位房间号即可加入，游戏流量走 EasyTier 虚拟网络（自动尝试 P2P 直连，受限时经共享节点中继），frp 固定中转作为备用通道。
 
-**当前版本：v2.2.0**（Windows + Linux 双平台，[前往下载](https://github.com/EVFBV/BLFP-client/releases/tag/v2.2.0)）
+**当前版本：v2.2.0**（Windows + Linux 双平台，[前往下载](https://github.com/blfp-team/blfp-client/releases/tag/v2.2.0)）
 
 ## 主要功能
 
@@ -22,7 +22,7 @@ BLFP 是面向 Minecraft Java 版的联机客户端。无需公网 IP：房主�
 | Linux | `BLFP-v2.2.0-linux-x86_64.AppImage` | 免安装，`chmod +x` 后直接运行 |
 | Linux | `BLFP-v2.2.0-linux-amd64.deb` | 安装到 /opt/BLFP 并注册桌面入口 |
 
-SHA256 校验值与完整变更列表见 [Release v2.2.0](https://github.com/EVFBV/BLFP-client/releases/tag/v2.2.0)。
+SHA256 校验值与完整变更列表见 [Release v2.2.0](https://github.com/blfp-team/blfp-client/releases/tag/v2.2.0)。
 
 > Linux 下 EasyTier 需要 `CAP_NET_ADMIN` 权限：以 root 运行，或执行
 > `sudo setcap cap_net_admin,cap_net_raw+ep /opt/BLFP/resources/bin/easytier-core`
@@ -47,7 +47,7 @@ SHA256 校验值与完整变更列表见 [Release v2.2.0](https://github.com/EVF
 完整的下载安装、联机教程、节点测速、管理台说明与 FAQ 见文档站（VitePress 构建）：
 
 - 文档源码与构建产物位于服务端工作区的 `docs/` 与 `docs/build/`
-- [更新日志](https://github.com/EVFBV/BLFP-client/releases) ｜ 服务端可配置三平台下载链接聚合页 `/download`
+- [更新日志](https://github.com/blfp-team/blfp-client/releases) ｜ 服务端可配置三平台下载链接聚合页 `/download`
 
 ## 本地开发
 

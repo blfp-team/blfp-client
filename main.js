@@ -20,7 +20,7 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('high-dpi-support', '1');
 app.commandLine.appendSwitch('force-color-profile', 'srgb');
 
-const GITHUB_RELEASE_API = 'https://api.github.com/repos/EVFBV/BLFP-client/releases/latest';
+const GITHUB_RELEASE_API = 'https://api.github.com/repos/blfp-team/blfp-client/releases/latest';
 let mainWindow;
 /* 布局调试器的独立窗口（仅 PRE 版带调试器时才会创建）。
    独立窗口的好处：主窗口可以随便切页面、开关弹窗，调试器始终在旁边可见可操作，
@@ -477,7 +477,7 @@ ipcMain.handle('check-github-update', async (_e, channel) => {
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const url = wantBeta
-      ? 'https://api.github.com/repos/EVFBV/BLFP-client/releases?per_page=30'
+      ? 'https://api.github.com/repos/blfp-team/blfp-client/releases?per_page=30'
       : GITHUB_RELEASE_API;
     const response = await fetch(url, {
       signal: controller.signal,

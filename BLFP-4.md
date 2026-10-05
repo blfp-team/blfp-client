@@ -35,7 +35,7 @@
 
 | 文件 | 大小 | 下载链接 |
 |------|------|----------|
-| BLFP-Setup-v2.1.1.exe | 272.8 MB | https://github.com/EVFBV/blfp-client/releases/download/v2.1.1/BLFP-Setup-v2.1.1.exe |
+| BLFP-Setup-v2.1.1.exe | 272.8 MB | https://github.com/blfp-team/blfp-client/releases/download/v2.1.1/BLFP-Setup-v2.1.1.exe |
 
 ---
 

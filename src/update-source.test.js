@@ -21,11 +21,11 @@ const MAIN = fs.readFileSync(path.join(ROOT, 'main.js'), 'utf8');
 
 /* 实测抓下来的真实返回（照抄，别改结构 —— 改了就不是在测真实契约了） */
 const REAL_PRE = {
-  repo: 'EVFBV/blfp-client',
+  repo: 'blfp-team/blfp-client',
   tag: 'v2.3.22-pre',
   prerelease: true,
   publishedAt: '2026-10-02T08:52:59Z',
-  htmlUrl: 'https://github.com/EVFBV/blfp-client/releases/tag/v2.3.22-pre',
+  htmlUrl: 'https://github.com/blfp-team/blfp-client/releases/tag/v2.3.22-pre',
   alwaysLatestUrl: 'http://47.103.142.240:8080/latest',
   fileCount: 1,
   files: [{
@@ -37,7 +37,7 @@ const REAL_PRE = {
     status: 'skipped',
     downloadUrl: 'http://47.103.142.240:8080/download/BLFP-Setup-v2.3.22-pre.exe',
     directUrl: 'http://47.103.142.240:8080/files/BLFP-Setup-v2.3.22-pre.exe',
-    sourceUrl: 'https://github.com/EVFBV/blfp-client/releases/download/v2.3.22-pre/BLFP-Setup-v2.3.22-pre.exe',
+    sourceUrl: 'https://github.com/blfp-team/blfp-client/releases/download/v2.3.22-pre/BLFP-Setup-v2.3.22-pre.exe',
   }],
   primaryDownloadUrl: 'http://47.103.142.240:8080/download/BLFP-Setup-v2.3.22-pre.exe',
 };
@@ -47,11 +47,11 @@ function stablePayload(overrides = {}) {
   const base = JSON.parse(JSON.stringify(REAL_PRE));
   base.tag = 'v2.3.22';
   base.prerelease = false;
-  base.htmlUrl = 'https://github.com/EVFBV/blfp-client/releases/tag/v2.3.22';
+  base.htmlUrl = 'https://github.com/blfp-team/blfp-client/releases/tag/v2.3.22';
   base.files[0].name = 'BLFP-Setup-v2.3.22.exe';
   base.files[0].downloadUrl = 'http://47.103.142.240:8080/download/BLFP-Setup-v2.3.22.exe';
   base.files[0].directUrl = 'http://47.103.142.240:8080/files/BLFP-Setup-v2.3.22.exe';
-  base.files[0].sourceUrl = 'https://github.com/EVFBV/blfp-client/releases/download/v2.3.22/BLFP-Setup-v2.3.22.exe';
+  base.files[0].sourceUrl = 'https://github.com/blfp-team/blfp-client/releases/download/v2.3.22/BLFP-Setup-v2.3.22.exe';
   return Object.assign(base, overrides);
 }
 
