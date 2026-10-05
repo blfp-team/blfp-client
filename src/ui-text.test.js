@@ -15,7 +15,7 @@ const path = require('node:path');
 
 const scan = require('./ui-text-scan.js');
 const ROOT = path.join(__dirname, '..');
-const FILES = ['renderer/index.html', 'renderer/app.js', 'main.js', 'preload.js'];
+const FILES = ['renderer/index.html', 'renderer/app.js', 'main.js', 'preload.js', 'scripts/changelog.js'];
 
 test('主程序界面文案里不能有"标签（括号解释）"的写法', () => {
   const hits = scan.scan(ROOT, FILES);

@@ -182,12 +182,12 @@ function build(from, to, opts) {
   out.push('');
   const total = Object.keys(groups).reduce((n, k) => n + groups[k].length, 0);
   if (isPre) {
-    out.push('> 这是**测试版（pre-release）**，用于提前验证；正式版用户不会被自动推送到此版本。');
+    out.push('> 这是**测试版**，用于提前验证；正式版用户不会被自动推送到此版本。');
     out.push('> 设置页把「更新渠道」切到**测试版**才能收到。');
     out.push('');
   }
   if (!total) {
-    out.push('本次发布没有面向用户的改动（仅构建/版本号变更）。');
+    out.push('本次发布没有面向用户的改动，只有构建和版本号变更。');
     out.push('');
   }
 
@@ -214,7 +214,7 @@ function build(from, to, opts) {
 
   if (opts.withBuild) {
     out.push('### 📦 构建信息');
-    out.push('- 版本：`' + ver + '`' + (isPre ? '（测试版）' : ''));
+    out.push('- 版本：`' + ver + '`' + (isPre ? ' 测试版' : ''));
     if (opts.sha) out.push('- 构建 commit：`' + opts.sha + '`');
     if (from) out.push('- 变更范围：`' + from + '...' + (to === 'HEAD' ? 'HEAD' : to) + '`');
     out.push('- 详细构建时间见包内 `renderer/build-info.js`');
@@ -243,7 +243,7 @@ if (require.main === module) {
 
   /* 生成结果为空（比如区间里没提交）要显式报错，别默默发一段空日志 */
   if (res.total === 0 && res.commitCount === 0) {
-    console.error('[changelog] 区间 ' + (from || '(开头)') + '..' + to + ' 没有任何提交，拒绝生成空日志');
+    console.error('[changelog] 区间 ' + (from || '开头') + '..' + to + ' 没有任何提交，拒绝生成空日志');
     /* 最常见的原因是**浅克隆**：CI 默认只拉 1 个提交，
        git describe <tag>^ 会 fatal，区间永远是空的。
        这里直接把病因和药方打出来，省得下次又从头查（真踩过）。 */
