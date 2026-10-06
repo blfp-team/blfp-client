@@ -5,8 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "node check-payload.js && electron-builder --win portable",
-    "test": "node --test install-core.test.js silent-mode.test.js ui-text.test.js",
+    "dist": "node check-payload.js && node scripts/patch-portable-nsis.js && electron-builder --win portable",
+    "test": "node --test install-core.test.js silent-mode.test.js ui-text.test.js splash-portable.test.js",
     "make-splash": "node scripts/make-splash.js"
   },
   "author": "",
