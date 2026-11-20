@@ -271,7 +271,7 @@
     <!-- 房间列表 (原广场) -->
     <div id="page-rooms" class="page">
       <div class="page-head"><h1 class="page-title">房间列表</h1><div class="page-head-actions"><button class="btn btn-primary btn-sm btn-glow" onclick="document.getElementById('join-room-modal').classList.remove('hidden')">加入房间</button><button class="btn btn-outline btn-sm" onclick="loadPublicRooms(true)">刷新</button></div></div>
-      <div id="public-rooms" class="list-grid"><div class="empty-state">点击刷新获取公开房间</div></div>
+      <div id="public-rooms" class="list-grid"><div class="empty-state">还没有公开房间<span class="empty-sub">点右上角「刷新」看看，或自己创建一个</span></div></div>
     </div>
 
     <!-- 好友 -->
@@ -291,15 +291,15 @@
       </div>
       <div id="friends-panel-list">
         <div class="page-head"><h2>好友列表</h2><button class="btn btn-outline btn-sm" onclick="loadFriends(true)">刷新</button></div>
-        <div id="friends-list" class="list-grid"><div class="empty-state">暂无好友</div></div>
+        <div id="friends-list" class="list-grid"><div class="empty-state">还没有好友<span class="empty-sub">用上方搜索框找人，或把房间号发给朋友</span></div></div>
       </div>
       <div id="friends-panel-requests" class="hidden">
         <div class="page-head"><h2>收到的好友申请</h2><button class="btn btn-outline btn-sm" onclick="loadFriendRequests()">刷新</button></div>
-        <div id="friends-requests-list" class="list-grid"><div class="empty-state">暂无待处理申请</div></div>
+        <div id="friends-requests-list" class="list-grid"><div class="empty-state">没有待处理的申请<span class="empty-sub">别人加你时会出现在这里</span></div></div>
       </div>
       <div id="friends-panel-history" class="hidden">
         <div class="page-head"><h2>发送历史</h2><button class="btn btn-outline btn-sm" onclick="loadFriendHistory()">刷新</button></div>
-        <div id="friends-history-list" class="list-grid"><div class="empty-state">暂无记录</div></div>
+        <div id="friends-history-list" class="list-grid"><div class="empty-state">还没有发送过申请<span class="empty-sub">在好友页搜索并发送申请后会记在这里</span></div></div>
       </div>
     </div>
 
@@ -384,7 +384,6 @@
         <div class="form-group"><label>接收哪个版本</label><select id="s-update-channel"><option value="stable">稳定版</option><option value="test">测试版</option></select></div>
         <div class="form-group"><label>游戏端口</label><input id="s-mc-port" type="number" value="25565" min="1" max="65535"></div>
         <div class="form-group"><label>启动时</label><select id="s-launch-behavior"><option value="ask">每次询问</option><option value="home">停在主页</option><option value="host">直接开房</option></select></div>
-        <button class="btn btn-primary btn-glow" onclick="saveSettings()">保存设置</button>
       </div>
 
       <div class="card">
@@ -450,6 +449,12 @@
       </div>
 
       <div class="community-link" style="margin-bottom:18px;text-align:center">官方交流群：<button onclick="copyQQGroup()">复制 QQ 群号 229527551</button></div>
+
+      <!-- 设置项分散在好几张卡里，保存按钮吸底常驻，滚到哪都能点 -->
+      <div class="settings-actions">
+        <span class="settings-actions-hint">改完记得保存 · 主题和字体是立即生效的</span>
+        <button class="btn btn-primary btn-glow" onclick="saveSettings()">保存设置</button>
+      </div>
     </div>
 
   </main>

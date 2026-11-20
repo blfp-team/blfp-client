@@ -699,11 +699,20 @@ function takeConfirmHandlers() {
   if (cancel) cancel.__handler = null;
   return h;
 }
-function showConfirm(title, msg, onConfirm) {
+function showConfirm(title, msg, onConfirm, opts) {
   const t = $('confirm-title');
   const m = $('confirm-msg');
   if (t) t.textContent = title;
   if (m) m.textContent = msg;
+  /* 破坏性操作（退出登录/退出软件）用红色确认键，别再和「加入房间」长得一样。
+     这个弹窗目前只用于退出类操作，所以默认 danger；将来用在普通确认上传
+     { danger: false } 即可。opts 可选，老调用点不传也不出问题。 */
+  const ok = $('confirm-ok');
+  if (ok && ok.classList) {
+    const danger = !(opts && opts.danger === false);
+    ok.classList.toggle('btn-danger', danger);
+    ok.classList.toggle('btn-primary', !danger);
+  }
   /* 必须走 openModal/closeModal：直接切 hidden 会绕过退场动画，弹窗会"瞬间消失" */
   openModal('confirm-modal');
   setConfirmHandlers(onConfirm, null);
@@ -2732,7 +2741,7 @@ function renderPublicRooms(rooms) {
   const list = $('public-rooms');
   if (!list) return;
   if (!rooms || !rooms.length) {
-    list.innerHTML = '<div class="empty-state">暂无公开房间</div>';
+    list.innerHTML = '<div class="empty-state">还没有公开房间<span class="empty-sub">点右上角「刷新」看看，或自己创建一个</span></div>';
     return;
   }
   list.innerHTML = rooms.map((room) => {
@@ -2861,7 +2870,7 @@ async function searchFriends() {
   const el = $('friend-search-results');
   try {
     const users = await api('/friends/search?q=' + encodeURIComponent(q));
-    if (!users.length) { el.innerHTML = '<div class="empty-state">未找到用户</div>'; return; }
+    if (!users.length) { el.innerHTML = '<div class="empty-state">没找到这个人<span class="empty-sub">换个用户名或邮箱再试试</span></div>'; return; }
     el.innerHTML = users.map(u => `
       <div class="friend-item" data-friend-id="${u.id}">
         <div class="fi-avatar">${escapeHtml(u.username.charAt(0).toUpperCase())}</div>
@@ -2907,7 +2916,7 @@ function loadFriends(initial = false) {
 function renderFriends(friends) {
   const list = $('friends-list');
   if (!list) return;
-  if (!friends || !friends.length) { list.innerHTML = '<div class="empty-state">暂无好友</div>'; return; }
+  if (!friends || !friends.length) { list.innerHTML = '<div class="empty-state">还没有好友<span class="empty-sub">用上方搜索框找人，或把房间号发给朋友</span></div>'; return; }
   list.innerHTML = friends.map((f) => `
     <div class="friend-item">
       <div class="fi-avatar">${escapeHtml(f.username.charAt(0).toUpperCase())}</div>
@@ -2926,7 +2935,7 @@ function loadFriendRequests() {
     const badge = $('ftab-requests-badge');
     if (badge) { if (reqs.length) { badge.textContent = reqs.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
     if (!list) return;
-    if (!reqs.length) { list.innerHTML = '<div class="empty-state">暂无待处理申请</div>'; return; }
+    if (!reqs.length) { list.innerHTML = '<div class="empty-state">没有待处理的申请<span class="empty-sub">别人加你时会出现在这里</span></div>'; return; }
     list.innerHTML = reqs.map(r => `
       <div class="friend-item">
         <div class="fi-avatar">${escapeHtml(r.username.charAt(0).toUpperCase())}</div>
@@ -2947,7 +2956,7 @@ function loadFriendHistory() {
   api('/friends/history').then((rows) => {
     const list = $('friends-history-list');
     if (!list) return;
-    if (!rows.length) { list.innerHTML = '<div class="empty-state">暂无记录</div>'; return; }
+    if (!rows.length) { list.innerHTML = '<div class="empty-state">还没有发送过申请<span class="empty-sub">在好友页搜索并发送申请后会记在这里</span></div>'; return; }
     const statusLabel = { pending: '等待确认', rejected: '已被拒绝' };
     list.innerHTML = rows.map(r => `
       <div class="friend-item">
@@ -3003,7 +3012,7 @@ async function removeFriend(userId) {
     if (list) {
       const item = list.querySelector('[data-friend-id="' + userId + '"]');
       if (item) item.remove();
-      if (!list.children.length) list.innerHTML = '<div class="empty-state">暂无好友</div>';
+      if (!list.children.length) list.innerHTML = '<div class="empty-state">还没有好友<span class="empty-sub">用上方搜索框找人，或把房间号发给朋友</span></div>';
     }
     try {
       await api(`/friends/${userId}`, { method: 'DELETE' });

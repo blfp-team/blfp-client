@@ -21,7 +21,7 @@
   
   --text: #eaeaf0;
   --text2: #8a8fa8;
-  --text3: #5a5f78;
+  --text3: #6f7794;
   
   --accent: #3b6eff;
   --accent-strong: #5580ff;
@@ -314,9 +314,11 @@ body::before {
   transition: all var(--fast);
   font-family: inherit;
 }
+/* 选中态统一用主色（原来是灰块，和侧边栏、主按钮不是一个语汇） */
 .auth-tabs button.active { 
-  background: rgba(var(--ov-rgb),0.08); color: var(--text); font-weight: 600;
-  box-shadow: 0 1px 3px var(--inset-1);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text); font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .auth-tabs button:hover:not(.active) { color: var(--text); background: rgba(var(--ov-rgb),0.03); }
 .auth-tabs button:active { transform: scale(0.97); }
@@ -331,7 +333,11 @@ body::before {
   font-size: .8rem; cursor: pointer; font-family: inherit;
   transition: all var(--fast);
 }
-.login-method-tabs button.active { background: rgba(var(--ov-rgb),0.06); color: var(--text); font-weight: 600; }
+.login-method-tabs button.active {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: var(--text); font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
 .login-method-tabs button:active { transform: scale(0.97); }
 
 .err-msg {
@@ -536,10 +542,13 @@ body.sidebar-collapsed .sidebar-gear-btn { margin-left: 0; }
 
 .content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
-  padding: 24px 28px;
+  /* 底部内边距挪到 .page 上：position:sticky 的吸底栏会停在 padding 内边缘，
+     留在容器上会让它底下漏出 24px 的内容（踩过） */
+  padding: 24px 28px 0;
   position: relative;
 }
-.page { display: none; max-width: 920px; margin: 0 auto; animation-fill-mode: backwards; }
+.page { display: none; max-width: 920px; margin: 0 auto; padding-bottom: 24px; animation-fill-mode: backwards; }
+#page-settings { padding-bottom: 0; }
 .page.active { display: block; }
 .page.page-entering { display: block; }
 .page.page-leaving {
@@ -552,6 +561,8 @@ body.sidebar-collapsed .sidebar-gear-btn { margin-left: 0; }
 .page.leave-to-right { animation: pageOutRight calc(0.25s * var(--anim-speed)) ease-in forwards; }
 .page-title { font-size: 1.3rem; margin-bottom: 20px; font-weight: 650; letter-spacing: -.3px; }
 .page-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+/* 页内小标题（好友列表/收到的好友申请…）：别再和页面标题抢同一档视觉重量 */
+.page-head h2 { font-size: .92rem; font-weight: 600; color: var(--text2); letter-spacing: .2px; }
 .page-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 .card {
@@ -721,6 +732,29 @@ body.sidebar-collapsed .sidebar-gear-btn { margin-left: 0; }
 .community-link button { border: 0; background: transparent; color: var(--accent2); cursor: pointer; }
 .community-link button:hover { text-decoration: underline; }
 
+/* 设置页吸底操作栏：设置项散在好几张卡里，保存按钮要一直够得着。
+   负边距抵掉内容区 padding，让它真正贴住滚动区底边。 */
+.settings-actions {
+  position: sticky; bottom: 0; z-index: 6;
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+  margin: 10px -28px 0;
+  padding: 14px 28px 16px;
+  background: var(--bg);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(var(--ov-rgb), 0.06);
+  box-shadow: 0 -14px 22px -14px rgba(0,0,0,0.55);
+}
+/* 上沿渐隐，内容滚过去不会被生硬切一刀 */
+.settings-actions::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 20px;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
+}
+.settings-actions-hint { margin-right: auto; font-size: .76rem; color: var(--text3); }
+@media (max-width: 700px) {
+  .settings-actions-hint { display: none; }
+}
+
 .form-group { margin-bottom: 14px; }
 .form-group label {
   display: block; font-size: .76rem; color: var(--text2);
@@ -850,7 +884,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 .btn-primary:active:not(:disabled) { transform: scale(0.96); }
 .btn-success { background: linear-gradient(135deg, var(--success), #34d399); color: #000; border: none; }
 .btn-success:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
-.btn-danger { background: linear-gradient(135deg, var(--danger), #f87171); color: #fff; border: none; }
+/* 危险按钮压深一档：原来的浅红配白字对比不足 */
+.btn-danger { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; border: none; box-shadow: 0 2px 12px rgba(220, 38, 38, 0.25); }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
 .btn-outline { background: transparent; border: 1px solid rgba(var(--ov-rgb),0.1); color: var(--text); }
 .btn-outline:hover:not(:disabled) { border-color: hsla(var(--lg-accent-h), 50%, 50%, 0.3); color: var(--accent2); background: hsla(var(--lg-accent-h), 50%, 50%, 0.04); }
@@ -960,6 +995,12 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 .list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .list-grid > .empty-state { grid-column: 1 / -1; }
+/* 整页只有空列表时（房间列表）把这块撑起来并居中；好友页的列表在搜索框和选项卡下面，
+   撑太高反而离标题老远，所以只管 rooms。 */
+#public-rooms:has(> .empty-state) {
+  min-height: min(56vh, 440px);
+  align-content: center;
+}
 .public-room {
   background: rgba(var(--surface-rgb), 0.4);
   border: 1px solid rgba(var(--ov-rgb),0.04);
@@ -988,7 +1029,25 @@ input[type="range"]::-webkit-slider-thumb:active {
 .pr-join { margin-left: auto; font-size: .75rem; color: var(--accent2); font-weight: 600; padding: 4px 12px; border-radius: 6px; background: hsla(var(--lg-accent-h), 50%, 50%, 0.06); transition: all var(--fast); }
 .public-room:hover .pr-join { background: hsla(var(--lg-accent-h), 50%, 50%, 0.12); }
 
-.empty-state { padding: 40px 0; text-align: center; color: var(--text2); font-size: .86rem; }
+/* 空状态：一行灰字悬在大片空白里太单薄，加一个「收件箱」图标和一个次级提示 */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 56px 20px 60px; text-align: center;
+  color: var(--text2); font-size: .9rem; line-height: 1.65;
+}
+.empty-state::before {
+  content: ''; width: 60px; height: 60px; border-radius: 18px; margin-bottom: 10px;
+  border: 1px solid rgba(var(--ov-rgb), 0.1);
+  background-color: rgba(var(--ov-rgb), 0.02);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8fa8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12l2.4-6.2A2 2 0 0 1 7.3 4.5h9.4a2 2 0 0 1 1.9 1.3L21 12'/><path d='M3 12v5.5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V12'/><path d='M3 12h5l1.5 2.5h5L16 12h5'/></svg>");
+  background-repeat: no-repeat; background-position: center; background-size: 26px 26px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+}
+.empty-state .empty-sub { font-size: .78rem; color: var(--text3); }
+[data-theme="light"] .empty-state::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7286' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12l2.4-6.2A2 2 0 0 1 7.3 4.5h9.4a2 2 0 0 1 1.9 1.3L21 12'/><path d='M3 12v5.5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V12'/><path d='M3 12h5l1.5 2.5h5L16 12h5'/></svg>");
+  box-shadow: 0 10px 24px rgba(20,30,60,0.06);
+}
 
 .friend-item { display: flex; align-items: center; gap: 12px; padding: 10px 8px; background: rgba(var(--ov-rgb),0.02); border-radius: var(--radius-sm); margin-bottom: 6px; }
 .fi-avatar {
@@ -1011,7 +1070,11 @@ input[type="range"]::-webkit-slider-thumb:active {
 .tab-btn { padding: 7px 14px; border: none; border-radius: 6px; background: transparent; color: var(--text2); font-size: .83rem; cursor: pointer; font-family: inherit; transition: all var(--fast); }
 .tab-btn:hover { color: var(--text); background: rgba(var(--ov-rgb),0.03); }
 .tab-btn:active { transform: scale(0.97); }
-.tab-btn.active { background: rgba(var(--ov-rgb),0.06); color: var(--text); font-weight: 600; }
+.tab-btn.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text); font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
 .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 4px; border-radius: 9px; background: var(--danger); color: #fff; font-size: .66rem; font-weight: 700; line-height: 1; }
 
 .user-title { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: .68rem; font-weight: 600; background: rgba(var(--ov-rgb),0.04); color: var(--text2); }
@@ -1155,6 +1218,11 @@ input[type="range"]::-webkit-slider-thumb:active {
   overflow: hidden; background: var(--inset-1);
 }
 .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+/* 消息清空后别留一整块黑（:empty 只在真的没有子节点时生效） */
+.chat-messages:empty::before {
+  content: '还没有消息，打个招呼吧';
+  margin: auto; color: var(--text3); font-size: .84rem;
+}
 .chat-messages::-webkit-scrollbar { width: 4px; }
 .chat-messages::-webkit-scrollbar-thumb { background: rgba(var(--ov-rgb),0.08); border-radius: 2px; }
 .chat-msg { display: flex; flex-direction: column; gap: 2px; max-width: 85%; }
@@ -1202,6 +1270,20 @@ input[type="range"]::-webkit-slider-thumb:active {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(var(--ov-rgb),0.06); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(var(--ov-rgb),0.1); }
+
+::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); color: var(--text); }
+
+/* 键盘导航：所有「看起来能点」的东西都要有可见焦点环（原来只有 .btn 有） */
+.nav-item:focus-visible,
+.tab-btn:focus-visible,
+.auth-tabs button:focus-visible,
+.login-method-tabs button:focus-visible,
+.sidebar-gear-btn:focus-visible,
+.sidebar-user-btn:focus-visible,
+.theme-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .cursor-trail {
   position: fixed; width: 8px; height: 8px; border-radius: 50%;
