@@ -42,3 +42,6 @@ Thumbs.db
 CHANGELOG_RELEASE.md
 # 构建时写入的版本/提交号
 renderer/build-info.js
+
+# 本地界面截图/验证工具（Electron 把页面画出来截图，只在开发机用）
+build-local/
